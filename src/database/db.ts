@@ -1,37 +1,28 @@
-import Dexie, { type Table } from 'dexie';
 import type { Product, Category, Supplier, Movement, Settings, PriceHistory, Location, ProductStock } from './types';
+import { SqlTable } from './sql-wrapper';
 
-export class InventoryDB extends Dexie {
-    products!: Table<Product, number>;
-    categories!: Table<Category, number>;
-    suppliers!: Table<Supplier, number>;
-    movements!: Table<Movement, number>;
-    settings!: Table<Settings, number>;
-    priceHistory!: Table<PriceHistory, number>;
-    locations!: Table<Location, number>;
-    productStock!: Table<ProductStock, number>;
+export class InventoryDB {
+    products = new SqlTable<Product>('products');
+    categories = new SqlTable<Category>('categories');
+    suppliers = new SqlTable<Supplier>('suppliers');
+    movements = new SqlTable<Movement>('movements');
+    settings = new SqlTable<Settings>('settings');
+    priceHistory = new SqlTable<PriceHistory>('priceHistory');
+    locations = new SqlTable<Location>('locations');
+    productStock = new SqlTable<ProductStock>('productStock');
 
-    constructor() {
-        super('InventorySystemDB');
-
-        this.version(1).stores({
-            products: '++id, name, sku, categoryId, supplierId, quantity',
-            categories: '++id, name',
-            suppliers: '++id, name',
-            movements: '++id, productId, type, date',
-            settings: '++id',
-        });
-
-        this.version(2).stores({
-            products: '++id, name, sku, categoryId, supplierId, quantity',
-            categories: '++id, name',
-            suppliers: '++id, name',
-            movements: '++id, productId, type, date, locationId',
-            settings: '++id',
-            priceHistory: '++id, productId, changedAt',
-            locations: '++id, name',
-            productStock: '++id, productId, locationId, [productId+locationId]',
-        });
+    async delete() {
+        // Drop all tables or clear databse
+        await Promise.all([
+            this.products.clear(),
+            this.categories.clear(),
+            this.suppliers.clear(),
+            this.movements.clear(),
+            this.settings.clear(),
+            this.priceHistory.clear(),
+            this.locations.clear(),
+            this.productStock.clear()
+        ]);
     }
 }
 

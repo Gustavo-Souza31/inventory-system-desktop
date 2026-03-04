@@ -1,0 +1,12 @@
+src/database/seed.ts(4,39): error TS2339: Property 'count' does not exist on type 'SqlTable<Category>'.
+src/pages/Categories.tsx(22,83): error TS2339: Property 'count' does not exist on type 'SqlQueryBuilder<Product>'.
+src/pages/Categories.tsx(55,89): error TS2339: Property 'count' does not exist on type 'SqlQueryBuilder<Product>'.
+src/pages/Dashboard.tsx(38,14): error TS2339: Property 'aboveOrEqual' does not exist on type 'SqlQueryBuilder<Movement>'.
+src/pages/Dashboard.tsx(43,69): error TS2339: Property 'limit' does not exist on type 'SqlQueryBuilder<Movement>'.
+src/pages/Dashboard.tsx(45,31): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/pages/Dashboard.tsx(46,51): error TS2339: Property 'get' does not exist on type 'SqlTable<Product>'.
+src/pages/Locations.tsx(71,79): error TS2339: Property 'delete' does not exist on type 'SqlQueryBuilder<ProductStock>'.
+src/pages/Movements.tsx(75,43): error TS2339: Property 'get' does not exist on type 'SqlTable<Product>'.
+src/pages/Products.tsx(93,75): error TS2339: Property 'delete' does not exist on type 'SqlQueryBuilder<Movement>'.
+src/pages/Products.tsx(94,78): error TS2339: Property 'delete' does not exist on type 'SqlQueryBuilder<PriceHistory>'.
+src/pages/Products.tsx(95,78): error TS2339: Property 'delete' does not exist on type 'SqlQueryBuilder<ProductStock>'.

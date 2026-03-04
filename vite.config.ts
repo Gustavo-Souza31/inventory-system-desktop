@@ -8,4 +8,8 @@ export default defineConfig({
   build: {
     outDir: "dist",
   },
+  optimizeDeps: {
+    exclude: ["pg", "pg-native"],
+  },
 });
+
