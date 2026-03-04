@@ -6,7 +6,14 @@ export async function connectToDatabase(config: PoolConfig) {
     if (pool) {
         await pool.end();
     }
-    pool = new Pool(config);
+
+    // Suporte para bancos em nuvem (ex: Supabase) que usam certificados auto-assinados no pooler
+    const dbConfig = { ...config };
+    if (dbConfig.ssl) {
+        dbConfig.ssl = { rejectUnauthorized: false };
+    }
+
+    pool = new Pool(dbConfig);
     // Test connection
     const client = await pool.connect();
     try {
