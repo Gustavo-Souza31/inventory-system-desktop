@@ -8,12 +8,16 @@ export async function connectToDatabase(config: PoolConfig) {
     }
 
     // Suporte para bancos em nuvem (ex: Supabase) que usam certificados auto-assinados no pooler
-    const dbConfig = { ...config };
-    if (dbConfig.ssl) {
-        dbConfig.ssl = { rejectUnauthorized: false };
-    }
+    // Montamos a URI encodando caracteres especiais da senha (como @) que quebram o parser
+    const encUser = encodeURIComponent((config.user as string) || '');
+    const encPass = encodeURIComponent((config.password as string) || '');
+    const connectionString = `postgresql://${encUser}:${encPass}@${config.host}:${config.port}/${config.database}`;
 
-    pool = new Pool(dbConfig);
+    pool = new Pool({
+        connectionString,
+        ssl: config.ssl ? { rejectUnauthorized: false } : undefined
+    });
+
     // Test connection
     const client = await pool.connect();
     try {
