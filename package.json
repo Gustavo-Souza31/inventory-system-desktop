@@ -47,7 +47,12 @@
       "electron-dist/**/*"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": false
     }
+  },
+  "optionalDependencies": {
+    "pg-native": "^3.7.0"
   }
 }

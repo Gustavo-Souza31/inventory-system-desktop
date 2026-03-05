@@ -230,6 +230,8 @@ body,
     flex-direction: column;
     overflow: hidden;
     min-width: 0;
+    min-height: 0;
+    /* Forces flex child to shrink and enable inner scrolling */
 }
 
 .page-header {
@@ -259,6 +261,9 @@ body,
     flex: 1;
     overflow-y: auto;
     padding: 24px 28px;
+    -webkit-overflow-scrolling: touch;
+    /* Smooth scrolling for mobile devices */
+    min-height: 0;
 }
 
 /* ===== BUTTONS ===== */
@@ -925,6 +930,208 @@ body,
     margin-bottom: 16px;
 }
 
+/* ===== RESPONSIVE ===== */
+
+/* Hamburger toggle button (hidden by default, shown on small screens) */
+.sidebar-toggle {
+    display: none;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 100;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-sm);
+    color: var(--text-primary);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.sidebar-toggle:hover {
+    background: var(--bg-card-hover);
+}
+
+/* Sidebar overlay backdrop (for small screens) */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+}
+
+.sidebar-overlay.visible {
+    display: block;
+}
+
+/* ===== BREAKPOINT: <= 1200px (Compact sidebar) ===== */
+@media (max-width: 1200px) {
+    :root {
+        --sidebar-width: 220px;
+    }
+
+    .sidebar-header {
+        padding: 18px 16px 16px;
+    }
+
+    .sidebar-nav {
+        padding: 10px 8px;
+    }
+
+    .sidebar-link {
+        padding: 9px 10px;
+        font-size: 13px;
+    }
+
+    .page-header {
+        padding: 0 20px;
+    }
+
+    .page-body {
+        padding: 20px !important;
+    }
+
+    .stat-card {
+        padding: 16px;
+    }
+}
+
+/* ===== BREAKPOINT: <= 900px (Icon-only sidebar) ===== */
+@media (max-width: 900px) {
+    :root {
+        --sidebar-width: 60px;
+    }
+
+    .sidebar-logo-text,
+    .sidebar-section-label {
+        display: none;
+    }
+
+    .sidebar-logo {
+        justify-content: center;
+    }
+
+    .sidebar-header {
+        padding: 16px 10px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-link {
+        justify-content: center;
+        padding: 12px 8px;
+        font-size: 0;
+        gap: 0;
+    }
+
+    .sidebar-link svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .sidebar-link.active::before {
+        height: 16px;
+    }
+
+    .page-header h2 {
+        font-size: 16px;
+    }
+
+    .toolbar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .toolbar .form-input {
+        min-width: 140px;
+    }
+}
+
+/* ===== BREAKPOINT: <= 700px (Overlay sidebar) ===== */
+@media (max-width: 700px) {
+    .sidebar-toggle {
+        display: block;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 260px;
+        min-width: 260px;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        z-index: 50;
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .sidebar-logo-text,
+    .sidebar-section-label {
+        display: block;
+    }
+
+    .sidebar-link {
+        justify-content: flex-start;
+        padding: 10px 12px;
+        font-size: 13.5px;
+        gap: 12px;
+    }
+
+    .sidebar-header {
+        padding: 24px 20px 20px;
+    }
+
+    .main-content {
+        width: 100vw;
+    }
+
+    .page-header {
+        padding: 0 16px 0 56px;
+    }
+
+    .page-header h2 {
+        font-size: 15px;
+    }
+
+    .page-body {
+        padding: 16px !important;
+    }
+
+    .stat-card {
+        min-width: 140px;
+    }
+
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table {
+        min-width: 600px;
+    }
+
+    .modal-content {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        margin: 10px;
+        max-height: 90vh;
+    }
+
+    .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .toolbar .form-input {
+        width: 100%;
+    }
+}
+
 /* ===== PRINT ===== */
 @media print {
 
@@ -932,7 +1139,8 @@ body,
     .page-header,
     .toolbar,
     .modal-overlay,
-    .btn {
+    .btn,
+    .sidebar-toggle {
         display: none !important;
     }
 

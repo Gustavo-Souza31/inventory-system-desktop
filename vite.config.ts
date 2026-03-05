@@ -7,6 +7,9 @@ export default defineConfig({
   base: "./",
   build: {
     outDir: "dist",
+    rollupOptions: {
+      external: ["pg", "pg-native"],
+    },
   },
   optimizeDeps: {
     exclude: ["pg", "pg-native"],

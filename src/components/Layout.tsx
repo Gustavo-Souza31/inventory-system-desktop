@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard,
@@ -10,6 +11,8 @@ import {
     BoxesIcon,
     MapPin,
     ShoppingCart,
+    Menu,
+    X,
 } from 'lucide-react';
 
 const navItems = [
@@ -39,10 +42,22 @@ const pageTitles: Record<string, string> = {
 export function Layout() {
     const location = useLocation();
     const title = pageTitles[location.pathname] || 'Inventário';
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     return (
         <div className="app-layout">
-            <aside className="sidebar">
+            {/* Hamburger toggle (visible only on small screens via CSS) */}
+            <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+                {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+
+            {/* Overlay backdrop */}
+            <div
+                className={`sidebar-overlay${sidebarOpen ? ' visible' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+            />
+
+            <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
                 <div className="sidebar-header">
                     <div className="sidebar-logo">
                         <div className="sidebar-logo-icon">
@@ -64,6 +79,7 @@ export function Layout() {
                             className={({ isActive }) =>
                                 `sidebar-link${isActive ? ' active' : ''}`
                             }
+                            onClick={() => setSidebarOpen(false)}
                         >
                             <item.icon />
                             {item.label}
@@ -82,3 +98,4 @@ export function Layout() {
         </div>
     );
 }
+
