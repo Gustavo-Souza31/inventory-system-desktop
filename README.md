@@ -1,6 +1,6 @@
 # 📦 Inventory System Desktop
 
-Sistema de gestão de inventário e ponto de venda (PDV) para desktop, construído com **Electron**, **React**, **TypeScript** e **IndexedDB**.
+Sistema de gestão de inventário e ponto de venda (PDV) para desktop, construído com **Electron**, **React**, **TypeScript** e **PostgreSQL (Supabase)**.
 
 ![Dashboard](https://img.shields.io/badge/Status-Em%20Desenvolvimento-blueviolet)
 ![Electron](https://img.shields.io/badge/Electron-33-47848f?logo=electron)
@@ -42,7 +42,7 @@ Sistema de gestão de inventário e ponto de venda (PDV) para desktop, construí
 | Frontend | React 18 + TypeScript |
 | Build | Vite 6 |
 | Desktop | Electron 33 |
-| Banco de Dados | IndexedDB (Dexie.js) |
+| Banco de Dados | PostgreSQL (via IPC) |
 | Ícones | Lucide React |
 | Barcode/QR | JsBarcode + QRCode |
 
@@ -56,7 +56,7 @@ Sistema de gestão de inventário e ponto de venda (PDV) para desktop, construí
 
 ```bash
 # Clone o repositório
-git clone https://github.com/seu-usuario/inventory-system-desktop.git
+git clone https://github.com/Gustavo-Souza31/inventory-system-desktop.git
 cd inventory-system-desktop
 
 # Instale as dependências
@@ -96,9 +96,10 @@ inventory-system-desktop/
 │   │   ├── Modal.tsx       # Modal genérico
 │   │   ├── BarcodeLabel.tsx # Etiqueta com código de barras/QR
 │   │   └── ...
-│   ├── database/           # Camada de dados (IndexedDB)
+│   ├── database/           # Camada de dados (PostgreSQL/IPC)
 │   │   ├── types.ts        # Interfaces TypeScript
-│   │   ├── db.ts           # Schema Dexie.js
+│   │   ├── sql-wrapper.ts  # Wrapper SQL para IPC
+│   │   ├── db.ts           # Handlers do banco de dados
 │   │   └── seed.ts         # Dados iniciais de exemplo
 │   ├── pages/              # Páginas da aplicação
 │   │   ├── Dashboard.tsx   # Painel de controle
