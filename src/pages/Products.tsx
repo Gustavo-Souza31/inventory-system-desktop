@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, Package, Download, Barcode, History } from 'lucide-react';
-import { db } from '../database/db';
+import { getAll, insert, updateById } from '../database/sql-wrapper';
+import { useCrud } from '../hooks/useCrud';
 import type { Product, Category, Supplier } from '../database/types';
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -10,12 +11,14 @@ import { BarcodeLabel } from '../components/BarcodeLabel';
 import { PriceHistoryModal } from '../components/PriceHistoryModal';
 import { exportToCsv } from '../utils/export';
 
-const emptyProduct: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> = {
+type ProductForm = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>;
+
+const emptyProduct: ProductForm = {
     name: '', sku: '', description: '', categoryId: 0, supplierId: null,
     price: 0, costPrice: 0, quantity: 0, minStock: 10, unit: 'un',
 };
 
-function validateProduct(p: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): string[] {
+function validateProduct(p: ProductForm): string[] {
     const errors: string[] = [];
     if (p.price <= 0) errors.push('O preço de venda deve ser maior que zero.');
     if (p.quantity < 0) errors.push('A quantidade em estoque não pode ser negativa.');
@@ -24,32 +27,41 @@ function validateProduct(p: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): st
 }
 
 export function Products() {
-    const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [search, setSearch] = useState('');
     const [filterCategory, setFilterCategory] = useState(0);
-    const [modalOpen, setModalOpen] = useState(false);
-    const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-    const [form, setForm] = useState(emptyProduct);
-    const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
     const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
     const [priceHistoryProduct, setPriceHistoryProduct] = useState<Product | null>(null);
     const [formErrors, setFormErrors] = useState<string[]>([]);
     const [formWarning, setFormWarning] = useState<string | null>(null);
 
-    const loadData = useCallback(async () => {
-        const [prods, cats, sups] = await Promise.all([
-            db.products.toArray(),
-            db.categories.toArray(),
-            db.suppliers.toArray(),
-        ]);
-        setProducts(prods);
-        setCategories(cats);
-        setSuppliers(sups);
-    }, []);
+    const {
+        items: products, modalOpen, setModalOpen, editing: editingProduct, form, setForm,
+        deleteTarget, setDeleteTarget, openNew: openNewBase, openEdit: openEditBase, handleDelete, loadData,
+    } = useCrud<Product, ProductForm>({
+        table: 'products',
+        emptyForm: emptyProduct,
+        toForm: (p) => ({
+            name: p.name, sku: p.sku, description: p.description,
+            categoryId: p.categoryId, supplierId: p.supplierId,
+            price: p.price, costPrice: p.costPrice,
+            quantity: p.quantity, minStock: p.minStock, unit: p.unit,
+        }),
+        // handleSave é totalmente customizado abaixo (validação + histórico
+        // de preço), então não usamos toRecord aqui.
+        // handleDelete não precisa mais limpar movements/priceHistory/
+        // productStock manualmente: todas têm ON DELETE CASCADE em
+        // productId (electron/database.ts), o banco já cuida disso.
+    });
 
-    useEffect(() => { loadData(); }, [loadData]);
+    useEffect(() => {
+        Promise.all([getAll<Category>('categories'), getAll<Supplier>('suppliers')])
+            .then(([cats, sups]) => {
+                setCategories(cats);
+                setSuppliers(sups);
+            });
+    }, []);
 
     const filtered = products.filter((p) => {
         const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -59,24 +71,16 @@ export function Products() {
     });
 
     function openNew() {
-        setEditingProduct(null);
-        setForm({ ...emptyProduct, categoryId: categories[0]?.id || 0 });
+        openNewBase();
+        setForm((f) => ({ ...f, categoryId: categories[0]?.id || 0 }));
         setFormErrors([]);
         setFormWarning(null);
-        setModalOpen(true);
     }
 
     function openEdit(p: Product) {
-        setEditingProduct(p);
-        setForm({
-            name: p.name, sku: p.sku, description: p.description,
-            categoryId: p.categoryId, supplierId: p.supplierId,
-            price: p.price, costPrice: p.costPrice,
-            quantity: p.quantity, minStock: p.minStock, unit: p.unit,
-        });
+        openEditBase(p);
         setFormErrors([]);
         setFormWarning(null);
-        setModalOpen(true);
     }
 
     async function handleSave() {
@@ -94,7 +98,7 @@ export function Products() {
         if (editingProduct?.id) {
             // Track price changes
             if (editingProduct.price !== form.price || editingProduct.costPrice !== form.costPrice) {
-                await db.priceHistory.add({
+                await insert('priceHistory', {
                     productId: editingProduct.id,
                     oldPrice: editingProduct.price,
                     newPrice: form.price,
@@ -103,23 +107,12 @@ export function Products() {
                     changedAt: now,
                 });
             }
-            await db.products.update(editingProduct.id, { ...form, updatedAt: now });
+            await updateById('products', editingProduct.id, { ...form, updatedAt: now });
         } else {
-            await db.products.add({ ...form, createdAt: now, updatedAt: now } as Product);
+            await insert('products', { ...form, createdAt: now, updatedAt: now });
         }
         setModalOpen(false);
-        loadData();
-    }
-
-    async function handleDelete() {
-        if (deleteTarget?.id) {
-            await db.products.delete(deleteTarget.id);
-            await db.movements.where('productId').equals(deleteTarget.id).delete();
-            await db.priceHistory.where('productId').equals(deleteTarget.id).delete();
-            await db.productStock.where('productId').equals(deleteTarget.id).delete();
-        }
-        setDeleteTarget(null);
-        loadData();
+        await loadData();
     }
 
     function handleExportCsv() {
