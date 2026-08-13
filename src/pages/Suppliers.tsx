@@ -1,67 +1,34 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Plus, Pencil, Trash2, Truck } from 'lucide-react';
-import { db } from '../database/db';
+import { useCrud } from '../hooks/useCrud';
 import type { Supplier } from '../database/types';
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SearchBar } from '../components/SearchBar';
 import { EmptyState } from '../components/EmptyState';
 
-const emptyForm = { name: '', email: '', phone: '', address: '', notes: '' };
+type SupplierForm = { name: string; email: string; phone: string; address: string; notes: string };
+const emptyForm: SupplierForm = { name: '', email: '', phone: '', address: '', notes: '' };
 
 export function Suppliers() {
-    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [search, setSearch] = useState('');
-    const [modalOpen, setModalOpen] = useState(false);
-    const [editing, setEditing] = useState<Supplier | null>(null);
-    const [form, setForm] = useState(emptyForm);
-    const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null);
-
-    const loadData = useCallback(async () => {
-        setSuppliers(await db.suppliers.toArray());
-    }, []);
-
-    useEffect(() => { loadData(); }, [loadData]);
+    const {
+        items: suppliers, modalOpen, setModalOpen, editing, form, setForm,
+        deleteTarget, setDeleteTarget, openNew, openEdit, handleSave, handleDelete,
+    } = useCrud<Supplier, SupplierForm>({
+        table: 'suppliers',
+        emptyForm,
+        toForm: (s) => ({ name: s.name, email: s.email, phone: s.phone, address: s.address, notes: s.notes }),
+        toRecord: (form, isNew) => (isNew ? { ...form, createdAt: new Date() } : { ...form }),
+        // Não precisa zerar supplierId nos produtos manualmente: a FK
+        // products.supplierId tem ON DELETE SET NULL (electron/database.ts),
+        // o banco já faz isso sozinho ao excluir o fornecedor.
+    });
 
     const filtered = suppliers.filter((s) =>
         s.name.toLowerCase().includes(search.toLowerCase()) ||
         s.email.toLowerCase().includes(search.toLowerCase())
     );
-
-    function openNew() {
-        setEditing(null);
-        setForm({ ...emptyForm });
-        setModalOpen(true);
-    }
-
-    function openEdit(s: Supplier) {
-        setEditing(s);
-        setForm({ name: s.name, email: s.email, phone: s.phone, address: s.address, notes: s.notes });
-        setModalOpen(true);
-    }
-
-    async function handleSave() {
-        if (editing?.id) {
-            await db.suppliers.update(editing.id, { ...form });
-        } else {
-            await db.suppliers.add({ ...form, createdAt: new Date() } as Supplier);
-        }
-        setModalOpen(false);
-        loadData();
-    }
-
-    async function handleDelete() {
-        if (deleteTarget?.id) {
-            await db.suppliers.delete(deleteTarget.id);
-            // Set supplierId to null on products that used this supplier
-            const prods = await db.products.where('supplierId').equals(deleteTarget.id).toArray();
-            for (const p of prods) {
-                await db.products.update(p.id!, { supplierId: null });
-            }
-        }
-        setDeleteTarget(null);
-        loadData();
-    }
 
     return (
         <>
