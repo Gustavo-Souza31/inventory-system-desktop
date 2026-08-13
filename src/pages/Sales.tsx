@@ -114,7 +114,7 @@ export function Sales() {
 
             // Update product quantity
             await db.products.update(item.product.id!, {
-                quantity: item.product.quantity - item.quantity,
+                quantity: Math.max(0, item.product.quantity - item.quantity),
                 updatedAt: now,
             });
 
