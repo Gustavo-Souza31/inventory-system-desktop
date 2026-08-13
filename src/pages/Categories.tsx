@@ -1,67 +1,45 @@
-import { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, Trash2, Tags } from 'lucide-react';
-import { db } from '../database/db';
-import type { Category } from '../database/types';
+import { findWhere } from '../database/sql-wrapper';
+import { useCrud } from '../hooks/useCrud';
+import type { Category, Product } from '../database/types';
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 
 const COLORS = ['#6c5ce7', '#00c9a7', '#ffc53d', '#ff6b6b', '#4ea8de', '#a78bfa', '#f97316', '#ec4899'];
 
+type EnrichedCategory = Category & { productCount: number };
+type CategoryForm = { name: string; description: string; color: string };
+
 export function Categories() {
-    const [categories, setCategories] = useState<(Category & { productCount: number })[]>([]);
-    const [modalOpen, setModalOpen] = useState(false);
-    const [editing, setEditing] = useState<Category | null>(null);
-    const [form, setForm] = useState({ name: '', description: '', color: COLORS[0] });
-    const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
-
-    const loadData = useCallback(async () => {
-        const cats = await db.categories.toArray();
-        const enriched = await Promise.all(
-            cats.map(async (c) => {
-                const count = await db.products.where('categoryId').equals(c.id!).count();
-                return { ...c, productCount: count };
-            })
-        );
-        setCategories(enriched);
-    }, []);
-
-    useEffect(() => { loadData(); }, [loadData]);
+    const {
+        items: categories, modalOpen, setModalOpen, editing, form, setForm,
+        deleteTarget, setDeleteTarget, openNew: openNewBase, openEdit, handleSave, handleDelete,
+    } = useCrud<EnrichedCategory, CategoryForm>({
+        table: 'categories',
+        emptyForm: { name: '', description: '', color: COLORS[0] },
+        toForm: (c) => ({ name: c.name, description: c.description, color: c.color }),
+        toRecord: (form, isNew) => (isNew ? { ...form, createdAt: new Date() } : { ...form }),
+        transform: async (cats) => {
+            return Promise.all(
+                cats.map(async (c) => {
+                    const prods = await findWhere<Product>('products', { categoryId: c.id });
+                    return { ...c, productCount: prods.length };
+                })
+            );
+        },
+        beforeDelete: async (c) => {
+            const prods = await findWhere<Product>('products', { categoryId: c.id });
+            if (prods.length > 0) {
+                return `Não é possível excluir: existem ${prods.length} produto(s) nesta categoria.`;
+            }
+            return null;
+        },
+    });
 
     function openNew() {
-        setEditing(null);
-        setForm({ name: '', description: '', color: COLORS[Math.floor(Math.random() * COLORS.length)] });
-        setModalOpen(true);
-    }
-
-    function openEdit(c: Category) {
-        setEditing(c);
-        setForm({ name: c.name, description: c.description, color: c.color });
-        setModalOpen(true);
-    }
-
-    async function handleSave() {
-        if (editing?.id) {
-            await db.categories.update(editing.id, { ...form });
-        } else {
-            await db.categories.add({ ...form, createdAt: new Date() } as Category);
-        }
-        setModalOpen(false);
-        loadData();
-    }
-
-    async function handleDelete() {
-        if (deleteTarget?.id) {
-            const count = await db.products.where('categoryId').equals(deleteTarget.id).count();
-            if (count > 0) {
-                alert(`Não é possível excluir: existem ${count} produto(s) nesta categoria.`);
-                setDeleteTarget(null);
-                return;
-            }
-            await db.categories.delete(deleteTarget.id);
-        }
-        setDeleteTarget(null);
-        loadData();
+        openNewBase();
+        setForm((f) => ({ ...f, color: COLORS[Math.floor(Math.random() * COLORS.length)] }));
     }
 
     return (
