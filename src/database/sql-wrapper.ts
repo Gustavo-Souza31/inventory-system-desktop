@@ -26,13 +26,11 @@ export class SqlTable<T> {
         const cols: string[] = [];
         const vals: any[] = [];
         const placeholders: string[] = [];
-        let i = 1;
         for (const [k, v] of Object.entries(obj)) {
             if (k === 'id') continue; // let DB handle auto increment
             cols.push(`"${k}"`);
             vals.push(v);
-            placeholders.push(`$${i}`);
-            i++;
+            placeholders.push('?');
         }
         return { cols, vals, placeholders };
     }
@@ -42,7 +40,7 @@ export class SqlTable<T> {
     }
 
     async get(id: number): Promise<T | undefined> {
-        const rows = await exec(`SELECT * FROM "${this.tableName}" WHERE id = $1 LIMIT 1`, [id]);
+        const rows = await exec(`SELECT * FROM "${this.tableName}" WHERE id = ? LIMIT 1`, [id]);
         return rows[0];
     }
 
@@ -68,25 +66,31 @@ export class SqlTable<T> {
     async update(id: number, changes: any): Promise<number> {
         const sets: string[] = [];
         const vals: any[] = [];
-        let i = 1;
         for (const [k, v] of Object.entries(changes)) {
             if (k === 'id') continue;
-            sets.push(`"${k}" = $${i}`);
+            sets.push(`"${k}" = ?`);
             vals.push(v);
-            i++;
         }
         vals.push(id);
-        const sql = `UPDATE "${this.tableName}" SET ${sets.join(', ')} WHERE id = $${i} RETURNING id`;
+        const sql = `UPDATE "${this.tableName}" SET ${sets.join(', ')} WHERE id = ? RETURNING id`;
         await exec(sql, vals);
         return 1;
     }
 
     async delete(id: number): Promise<void> {
-        await exec(`DELETE FROM "${this.tableName}" WHERE id = $1`, [id]);
+        await exec(`DELETE FROM "${this.tableName}" WHERE id = ?`, [id]);
     }
 
     async clear(): Promise<void> {
-        await exec(`TRUNCATE TABLE "${this.tableName}" RESTART IDENTITY CASCADE`);
+        await exec(`DELETE FROM "${this.tableName}"`);
+        try {
+            // sqlite_sequence só existe depois do primeiro INSERT em alguma tabela
+            // AUTOINCREMENT; num banco novo que nunca recebeu dados, a tabela nem
+            // existe ainda, então esse reset é opcional e pode falhar silenciosamente.
+            await exec(`DELETE FROM sqlite_sequence WHERE name = ?`, [this.tableName]);
+        } catch {
+            // nada a resetar
+        }
     }
 
     // Builder methods
@@ -112,7 +116,7 @@ class SqlQueryBuilder<T> {
             // where({ a: 1, b: 2 })
             for (const [k, v] of Object.entries(query)) {
                 this.values.push(v);
-                this.conditions.push(`"${k}" = $${this.values.length}`);
+                this.conditions.push(`"${k}" = ?`);
             }
         }
         return this;
@@ -123,7 +127,7 @@ class SqlQueryBuilder<T> {
         const idx = this.conditions.findIndex(c => c.includes('$VAR'));
         if (idx !== -1) {
             this.values.push(val);
-            this.conditions[idx] = this.conditions[idx].replace('$VAR', `$${this.values.length}`);
+            this.conditions[idx] = this.conditions[idx].replace('$VAR', '?');
         }
         return this;
     }
@@ -132,7 +136,7 @@ class SqlQueryBuilder<T> {
         const idx = this.conditions.findIndex(c => c.includes('$VAR'));
         if (idx !== -1) {
             this.values.push(val);
-            this.conditions[idx] = this.conditions[idx].replace('=', '>=').replace('$VAR', `$${this.values.length}`);
+            this.conditions[idx] = this.conditions[idx].replace('=', '>=').replace('$VAR', '?');
         }
         return this;
     }
@@ -200,4 +204,48 @@ class SqlQueryBuilder<T> {
         const rows = await exec(sql, this.values);
         return rows[0];
     }
+}
+
+// ---------------------------------------------------------------------------
+// API simplificada (sem builder encadeado) — em avaliação para substituir a
+// classe SqlTable acima em todo o projeto. Por enquanto só Categories.tsx usa
+// estas funções; o resto do app continua na API antiga (db.categories, etc.).
+// ---------------------------------------------------------------------------
+
+export async function getAll<T>(table: string): Promise<T[]> {
+    return await exec(`SELECT * FROM "${table}"`);
+}
+
+export async function getById<T>(table: string, id: number): Promise<T | undefined> {
+    const rows = await exec(`SELECT * FROM "${table}" WHERE id = ? LIMIT 1`, [id]);
+    return rows[0];
+}
+
+export async function findWhere<T>(table: string, query: Record<string, any>): Promise<T[]> {
+    const cols = Object.keys(query);
+    const vals = Object.values(query);
+    const where = cols.map((k) => `"${k}" = ?`).join(' AND ');
+    return await exec(`SELECT * FROM "${table}" WHERE ${where}`, vals);
+}
+
+export async function insert(table: string, item: Record<string, any>): Promise<number> {
+    const entries = Object.entries(item).filter(([k]) => k !== 'id');
+    const cols = entries.map(([k]) => `"${k}"`);
+    const placeholders = entries.map(() => '?');
+    const vals = entries.map(([, v]) => v);
+    const sql = `INSERT INTO "${table}" (${cols.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING id`;
+    const rows = await exec(sql, vals);
+    return rows[0].id;
+}
+
+export async function updateById(table: string, id: number, changes: Record<string, any>): Promise<void> {
+    const entries = Object.entries(changes).filter(([k]) => k !== 'id');
+    const sets = entries.map(([k]) => `"${k}" = ?`);
+    const vals = entries.map(([, v]) => v);
+    vals.push(id);
+    await exec(`UPDATE "${table}" SET ${sets.join(', ')} WHERE id = ?`, vals);
+}
+
+export async function deleteById(table: string, id: number): Promise<void> {
+    await exec(`DELETE FROM "${table}" WHERE id = ?`, [id]);
 }

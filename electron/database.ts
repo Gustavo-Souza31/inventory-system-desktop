@@ -1,37 +1,23 @@
-import { Pool, PoolConfig } from 'pg';
+import Database from 'better-sqlite3';
+import { app } from 'electron';
+import path from 'path';
 
-let pool: Pool | null = null;
+let db: Database.Database | null = null;
 
-export async function connectToDatabase(config: PoolConfig) {
-    if (pool) {
-        await pool.end();
-    }
+export function initDatabase() {
+    const dbPath = path.join(app.getPath('userData'), 'inventory.db');
+    db = new Database(dbPath);
 
-    // Suporte para bancos em nuvem (ex: Supabase) que usam certificados auto-assinados no pooler
-    // Montamos a URI encodando caracteres especiais da senha (como @) que quebram o parser
-    const encUser = encodeURIComponent((config.user as string) || '');
-    const encPass = encodeURIComponent((config.password as string) || '');
-    const connectionString = `postgresql://${encUser}:${encPass}@${config.host}:${config.port}/${config.database}`;
+    // SQLite não aplica FOREIGN KEY por padrão — precisa ligar em cada conexão
+    db.pragma('foreign_keys = ON');
 
-    pool = new Pool({
-        connectionString,
-        ssl: config.ssl ? { rejectUnauthorized: false } : undefined
-    });
-
-    // Test connection
-    const client = await pool.connect();
-    try {
-        await initializeSchema(client);
-    } finally {
-        client.release();
-    }
-    return true;
+    initializeSchema(db);
 }
 
-async function initializeSchema(client: any) {
-    await client.query(`
+function initializeSchema(database: Database.Database) {
+    database.exec(`
         CREATE TABLE IF NOT EXISTS "categories" (
-            "id" SERIAL PRIMARY KEY,
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT,
             "name" VARCHAR(255) NOT NULL,
             "description" TEXT,
             "color" VARCHAR(50),
@@ -39,7 +25,7 @@ async function initializeSchema(client: any) {
         );
 
         CREATE TABLE IF NOT EXISTS "suppliers" (
-            "id" SERIAL PRIMARY KEY,
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT,
             "name" VARCHAR(255) NOT NULL,
             "email" VARCHAR(255),
             "phone" VARCHAR(50),
@@ -49,15 +35,15 @@ async function initializeSchema(client: any) {
         );
 
         CREATE TABLE IF NOT EXISTS "products" (
-            "id" SERIAL PRIMARY KEY,
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT,
             "name" VARCHAR(255) NOT NULL,
             "sku" VARCHAR(100) UNIQUE NOT NULL,
             "description" TEXT,
-            "categoryId" INTEGER,
-            "supplierId" INTEGER,
-            "price" DECIMAL(10,2) NOT NULL,
-            "costPrice" DECIMAL(10,2) NOT NULL,
-            "quantity" INTEGER NOT NULL DEFAULT 0,
+            "categoryId" INTEGER REFERENCES "categories"("id") ON DELETE RESTRICT,
+            "supplierId" INTEGER REFERENCES "suppliers"("id") ON DELETE SET NULL,
+            "price" DECIMAL(10,2) NOT NULL CHECK ("price" >= 0),
+            "costPrice" DECIMAL(10,2) NOT NULL CHECK ("costPrice" >= 0),
+            "quantity" INTEGER NOT NULL DEFAULT 0 CHECK ("quantity" >= 0),
             "minStock" INTEGER NOT NULL DEFAULT 0,
             "unit" VARCHAR(50) NOT NULL,
             "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -65,7 +51,7 @@ async function initializeSchema(client: any) {
         );
 
         CREATE TABLE IF NOT EXISTS "locations" (
-            "id" SERIAL PRIMARY KEY,
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT,
             "name" VARCHAR(255) NOT NULL,
             "address" TEXT,
             "description" TEXT,
@@ -73,27 +59,27 @@ async function initializeSchema(client: any) {
         );
 
         CREATE TABLE IF NOT EXISTS "movements" (
-            "id" SERIAL PRIMARY KEY,
-            "productId" INTEGER NOT NULL,
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+            "productId" INTEGER NOT NULL REFERENCES "products"("id") ON DELETE CASCADE,
             "type" VARCHAR(50) NOT NULL,
-            "quantity" INTEGER NOT NULL,
+            "quantity" INTEGER NOT NULL CHECK ("quantity" > 0),
             "reason" TEXT,
             "notes" TEXT,
-            "locationId" INTEGER,
+            "locationId" INTEGER REFERENCES "locations"("id") ON DELETE SET NULL,
             "date" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS "settings" (
-            "id" SERIAL PRIMARY KEY,
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT,
             "companyName" VARCHAR(255),
             "cnpj" VARCHAR(50),
             "lowStockThreshold" INTEGER DEFAULT 10
         );
 
         CREATE TABLE IF NOT EXISTS "priceHistory" (
-            "id" SERIAL PRIMARY KEY,
-            "productId" INTEGER NOT NULL,
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+            "productId" INTEGER NOT NULL REFERENCES "products"("id") ON DELETE CASCADE,
             "oldPrice" DECIMAL(10,2) NOT NULL,
             "newPrice" DECIMAL(10,2) NOT NULL,
             "oldCostPrice" DECIMAL(10,2) NOT NULL,
@@ -102,25 +88,32 @@ async function initializeSchema(client: any) {
         );
 
         CREATE TABLE IF NOT EXISTS "productStock" (
-            "id" SERIAL PRIMARY KEY,
-            "productId" INTEGER NOT NULL,
-            "locationId" INTEGER NOT NULL,
-            "quantity" INTEGER NOT NULL DEFAULT 0
+            "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+            "productId" INTEGER NOT NULL REFERENCES "products"("id") ON DELETE CASCADE,
+            "locationId" INTEGER NOT NULL REFERENCES "locations"("id") ON DELETE CASCADE,
+            "quantity" INTEGER NOT NULL DEFAULT 0 CHECK ("quantity" >= 0),
+            UNIQUE ("productId", "locationId")
         );
     `);
 }
 
-export async function queryDatabase(text: string, values?: any[]) {
-    if (!pool) {
-        throw new Error("Banco de dados não conectado. Configure a conexão nas Configurações.");
+export async function queryDatabase(text: string, values: any[] = []) {
+    if (!db) {
+        throw new Error("Banco de dados não inicializado.");
     }
-    const result = await pool.query(text, values);
-    return result;
-}
 
-export async function disconnectDatabase() {
-    if (pool) {
-        await pool.end();
-        pool = null;
+    // better-sqlite3 só aceita number/string/bigint/buffer/null como parâmetro —
+    // datas chegam como objetos Date vindos do renderer, então convertemos aqui.
+    const params = values.map((v) => (v instanceof Date ? v.toISOString() : v));
+
+    const stmt = db.prepare(text);
+    const returnsRows = /^\s*select/i.test(text) || /returning/i.test(text);
+
+    if (returnsRows) {
+        const rows = stmt.all(...params);
+        return { rows, rowCount: rows.length };
     }
+
+    const info = stmt.run(...params);
+    return { rows: [], rowCount: info.changes };
 }

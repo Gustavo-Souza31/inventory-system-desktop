@@ -8,11 +8,11 @@ export default defineConfig({
   build: {
     outDir: "dist",
     rollupOptions: {
-      external: ["pg", "pg-native"],
+      external: ["better-sqlite3"],
     },
   },
   optimizeDeps: {
-    exclude: ["pg", "pg-native"],
+    exclude: ["better-sqlite3"],
   },
 });
 

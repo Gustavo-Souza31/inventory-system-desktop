@@ -1,6 +1,7 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, dialog } from "electron";
 import path from "path";
 import { registerIpcHandlers } from "./ipc-handlers";
+import { initDatabase } from "./database";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -27,6 +28,14 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  try {
+    initDatabase();
+  } catch (error: any) {
+    dialog.showErrorBox("Erro ao abrir o banco de dados", error.message || String(error));
+    app.quit();
+    return;
+  }
+
   registerIpcHandlers();
   createWindow();
 
