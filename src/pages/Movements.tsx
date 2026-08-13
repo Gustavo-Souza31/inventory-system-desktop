@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, Download } from 'lucide-react';
-import { db } from '../database/db';
-import type { Product, Movement, Location } from '../database/types';
+import { getAll, getById, findWhere, insert, updateById } from '../database/sql-wrapper';
+import type { Product, Movement, Location, ProductStock } from '../database/types';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { SearchBar } from '../components/SearchBar';
@@ -25,11 +25,12 @@ export function Movements() {
     });
 
     const loadData = useCallback(async () => {
-        const prods = await db.products.toArray();
-        const locs = await db.locations.toArray();
+        const prods = await getAll<Product>('products');
+        const locs = await getAll<Location>('locations');
         setProducts(prods);
         setLocations(locs);
-        const movs = await db.movements.orderBy('date').reverse().toArray();
+        const movs = (await getAll<Movement>('movements'))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         const enriched = movs.map((m) => ({
             ...m,
             productName: prods.find((p) => p.id === m.productId)?.name || 'Produto removido',
@@ -63,7 +64,7 @@ export function Movements() {
         setSaveError(null);
         const now = new Date();
         try {
-            await db.movements.add({
+            await insert('movements', {
                 productId: form.productId,
                 type: form.type,
                 quantity: form.quantity,
@@ -75,27 +76,28 @@ export function Movements() {
             });
 
             // Update product quantity
-            const product = await db.products.get(form.productId);
+            const product = await getById<Product>('products', form.productId);
             if (product) {
                 const newQty = form.type === 'entrada'
                     ? product.quantity + form.quantity
                     : Math.max(0, product.quantity - form.quantity);
-                await db.products.update(product.id!, { quantity: newQty, updatedAt: now });
+                await updateById('products', product.id!, { quantity: newQty, updatedAt: now });
             }
 
             // Update location stock if location is specified
             if (form.locationId) {
-                const existing = await db.productStock
-                    .where({ productId: form.productId, locationId: form.locationId })
-                    .first();
+                const [existing] = await findWhere<ProductStock>('productStock', {
+                    productId: form.productId,
+                    locationId: form.locationId,
+                });
 
                 if (existing) {
                     const newQty = form.type === 'entrada'
                         ? existing.quantity + form.quantity
                         : Math.max(0, existing.quantity - form.quantity);
-                    await db.productStock.update(existing.id!, { quantity: newQty });
+                    await updateById('productStock', existing.id!, { quantity: newQty });
                 } else if (form.type === 'entrada') {
-                    await db.productStock.add({
+                    await insert('productStock', {
                         productId: form.productId,
                         locationId: form.locationId,
                         quantity: form.quantity,
