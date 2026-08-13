@@ -15,6 +15,14 @@ const emptyProduct: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> = {
     price: 0, costPrice: 0, quantity: 0, minStock: 10, unit: 'un',
 };
 
+function validateProduct(p: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): string[] {
+    const errors: string[] = [];
+    if (p.price <= 0) errors.push('O preço de venda deve ser maior que zero.');
+    if (p.quantity < 0) errors.push('A quantidade em estoque não pode ser negativa.');
+    if (p.costPrice < 0) errors.push('O preço de custo não pode ser negativo.');
+    return errors;
+}
+
 export function Products() {
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -27,6 +35,8 @@ export function Products() {
     const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
     const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
     const [priceHistoryProduct, setPriceHistoryProduct] = useState<Product | null>(null);
+    const [formErrors, setFormErrors] = useState<string[]>([]);
+    const [formWarning, setFormWarning] = useState<string | null>(null);
 
     const loadData = useCallback(async () => {
         const [prods, cats, sups] = await Promise.all([
@@ -51,6 +61,8 @@ export function Products() {
     function openNew() {
         setEditingProduct(null);
         setForm({ ...emptyProduct, categoryId: categories[0]?.id || 0 });
+        setFormErrors([]);
+        setFormWarning(null);
         setModalOpen(true);
     }
 
@@ -62,10 +74,22 @@ export function Products() {
             price: p.price, costPrice: p.costPrice,
             quantity: p.quantity, minStock: p.minStock, unit: p.unit,
         });
+        setFormErrors([]);
+        setFormWarning(null);
         setModalOpen(true);
     }
 
     async function handleSave() {
+        const errors = validateProduct(form);
+        setFormErrors(errors);
+        if (errors.length > 0) return;
+
+        setFormWarning(
+            form.costPrice > form.price
+                ? 'Atenção: o preço de custo é maior que o preço de venda. O produto será salvo mesmo assim.'
+                : null
+        );
+
         const now = new Date();
         if (editingProduct?.id) {
             // Track price changes
@@ -254,6 +278,16 @@ export function Products() {
                             <option value="pct">Pacote (pct)</option>
                         </select>
                     </div>
+                    {formErrors.length > 0 && (
+                        <div style={{ marginTop: '8px' }}>
+                            {formErrors.map((err) => (
+                                <p key={err} style={{ color: 'var(--danger)', fontSize: '13px', margin: '4px 0' }}>⚠️ {err}</p>
+                            ))}
+                        </div>
+                    )}
+                    {formWarning && (
+                        <p style={{ color: 'var(--warning)', fontSize: '13px', marginTop: '8px' }}>⚠️ {formWarning}</p>
+                    )}
                 </Modal>
             )}
 
