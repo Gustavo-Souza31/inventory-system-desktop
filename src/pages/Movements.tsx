@@ -14,6 +14,7 @@ export function Movements() {
     const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState<'' | 'entrada' | 'saida'>('');
     const [modalOpen, setModalOpen] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
     const [form, setForm] = useState({
         productId: 0,
         type: 'entrada' as 'entrada' | 'saida',
@@ -59,50 +60,55 @@ export function Movements() {
     }
 
     async function handleSave() {
+        setSaveError(null);
         const now = new Date();
-        await db.movements.add({
-            productId: form.productId,
-            type: form.type,
-            quantity: form.quantity,
-            reason: form.reason,
-            notes: form.notes,
-            locationId: form.locationId,
-            date: now,
-            createdAt: now,
-        });
+        try {
+            await db.movements.add({
+                productId: form.productId,
+                type: form.type,
+                quantity: form.quantity,
+                reason: form.reason,
+                notes: form.notes,
+                locationId: form.locationId,
+                date: now,
+                createdAt: now,
+            });
 
-        // Update product quantity
-        const product = await db.products.get(form.productId);
-        if (product) {
-            const newQty = form.type === 'entrada'
-                ? product.quantity + form.quantity
-                : Math.max(0, product.quantity - form.quantity);
-            await db.products.update(product.id!, { quantity: newQty, updatedAt: now });
-        }
-
-        // Update location stock if location is specified
-        if (form.locationId) {
-            const existing = await db.productStock
-                .where('[productId+locationId]')
-                .equals([form.productId, form.locationId])
-                .first();
-
-            if (existing) {
+            // Update product quantity
+            const product = await db.products.get(form.productId);
+            if (product) {
                 const newQty = form.type === 'entrada'
-                    ? existing.quantity + form.quantity
-                    : Math.max(0, existing.quantity - form.quantity);
-                await db.productStock.update(existing.id!, { quantity: newQty });
-            } else if (form.type === 'entrada') {
-                await db.productStock.add({
-                    productId: form.productId,
-                    locationId: form.locationId,
-                    quantity: form.quantity,
-                });
+                    ? product.quantity + form.quantity
+                    : Math.max(0, product.quantity - form.quantity);
+                await db.products.update(product.id!, { quantity: newQty, updatedAt: now });
             }
-        }
 
-        setModalOpen(false);
-        loadData();
+            // Update location stock if location is specified
+            if (form.locationId) {
+                const existing = await db.productStock
+                    .where({ productId: form.productId, locationId: form.locationId })
+                    .first();
+
+                if (existing) {
+                    const newQty = form.type === 'entrada'
+                        ? existing.quantity + form.quantity
+                        : Math.max(0, existing.quantity - form.quantity);
+                    await db.productStock.update(existing.id!, { quantity: newQty });
+                } else if (form.type === 'entrada') {
+                    await db.productStock.add({
+                        productId: form.productId,
+                        locationId: form.locationId,
+                        quantity: form.quantity,
+                    });
+                }
+            }
+
+            setModalOpen(false);
+            loadData();
+        } catch (err) {
+            console.error('Erro ao registrar movimentação:', err);
+            setSaveError(err instanceof Error ? err.message : 'Erro desconhecido ao salvar.');
+        }
     }
 
     function handleExportCsv() {
@@ -239,6 +245,11 @@ export function Movements() {
                         <label className="form-label">Observações</label>
                         <textarea className="form-textarea" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Notas adicionais (NF, pedido, etc.)" />
                     </div>
+                    {saveError && (
+                        <p style={{ color: 'var(--danger)', fontSize: '13px', marginTop: '8px' }}>
+                            ⚠️ {saveError}
+                        </p>
+                    )}
                 </Modal>
             )}
         </>
