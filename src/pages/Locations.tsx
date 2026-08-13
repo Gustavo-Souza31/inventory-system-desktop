@@ -1,79 +1,62 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, MapPin, Package } from 'lucide-react';
-import { db } from '../database/db';
-import type { Location, ProductStock } from '../database/types';
+import { getAll } from '../database/sql-wrapper';
+import { useCrud } from '../hooks/useCrud';
+import type { Location, ProductStock, Product } from '../database/types';
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 
-const emptyForm = { name: '', address: '', description: '' };
+type LocationForm = { name: string; address: string; description: string };
+const emptyForm: LocationForm = { name: '', address: '', description: '' };
 
 export function Locations() {
-    const [locations, setLocations] = useState<(Location & { totalItems: number; productCount: number })[]>([]);
     const [selectedLocation, setSelectedLocation] = useState<number | null>(null);
-    const [locationStock, setLocationStock] = useState<(ProductStock & { productName: string; productSku: string })[]>([]);
-    const [modalOpen, setModalOpen] = useState(false);
-    const [editing, setEditing] = useState<Location | null>(null);
-    const [form, setForm] = useState(emptyForm);
-    const [deleteTarget, setDeleteTarget] = useState<Location | null>(null);
+    const [allStock, setAllStock] = useState<ProductStock[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
 
-    const loadData = useCallback(async () => {
-        const locs = await db.locations.toArray();
-        const prods = await db.products.toArray();
-        const allStock = await db.productStock.toArray();
+    const {
+        items: rawLocations, modalOpen, setModalOpen, editing, form, setForm,
+        deleteTarget, setDeleteTarget, openNew, openEdit, handleSave, handleDelete: handleDeleteBase,
+    } = useCrud<Location, LocationForm>({
+        table: 'locations',
+        emptyForm,
+        toForm: (loc) => ({ name: loc.name, address: loc.address, description: loc.description }),
+        toRecord: (form, isNew) => (isNew ? { ...form, createdAt: new Date() } : { ...form }),
+        // Não precisa apagar o estoque do local manualmente: a FK
+        // productStock.locationId tem ON DELETE CASCADE, o banco já
+        // remove essas linhas sozinho ao excluir o local.
+    });
 
-        const enriched = locs.map((loc) => {
-            const stocks = allStock.filter((s) => s.locationId === loc.id);
-            return {
-                ...loc,
-                totalItems: stocks.reduce((sum, s) => sum + s.quantity, 0),
-                productCount: stocks.length,
-            };
-        });
-        setLocations(enriched);
-
-        if (selectedLocation) {
-            const stocks = allStock.filter((s) => s.locationId === selectedLocation);
-            const enrichedStock = stocks.map((s) => {
-                const prod = prods.find((p) => p.id === s.productId);
-                return { ...s, productName: prod?.name || 'Removido', productSku: prod?.sku || '-' };
+    // Recarrega estoque/produtos sempre que a lista de locais mudar
+    // (ou seja, depois de qualquer criação/edição/exclusão)
+    useEffect(() => {
+        Promise.all([getAll<ProductStock>('productStock'), getAll<Product>('products')])
+            .then(([stock, prods]) => {
+                setAllStock(stock);
+                setProducts(prods);
             });
-            setLocationStock(enrichedStock);
-        }
-    }, [selectedLocation]);
+    }, [rawLocations]);
 
-    useEffect(() => { loadData(); }, [loadData]);
+    const locations = rawLocations.map((loc) => {
+        const stocks = allStock.filter((s) => s.locationId === loc.id);
+        return {
+            ...loc,
+            totalItems: stocks.reduce((sum, s) => sum + s.quantity, 0),
+            productCount: stocks.length,
+        };
+    });
 
-    function openNew() {
-        setEditing(null);
-        setForm({ ...emptyForm });
-        setModalOpen(true);
-    }
-
-    function openEdit(loc: Location) {
-        setEditing(loc);
-        setForm({ name: loc.name, address: loc.address, description: loc.description });
-        setModalOpen(true);
-    }
-
-    async function handleSave() {
-        if (editing?.id) {
-            await db.locations.update(editing.id, { ...form });
-        } else {
-            await db.locations.add({ ...form, createdAt: new Date() } as Location);
-        }
-        setModalOpen(false);
-        loadData();
-    }
+    const locationStock = allStock
+        .filter((s) => s.locationId === selectedLocation)
+        .map((s) => {
+            const prod = products.find((p) => p.id === s.productId);
+            return { ...s, productName: prod?.name || 'Removido', productSku: prod?.sku || '-' };
+        });
 
     async function handleDelete() {
-        if (deleteTarget?.id) {
-            await db.productStock.where('locationId').equals(deleteTarget.id).delete();
-            await db.locations.delete(deleteTarget.id);
-        }
-        setDeleteTarget(null);
+        await handleDeleteBase();
         setSelectedLocation(null);
-        loadData();
     }
 
     return (
