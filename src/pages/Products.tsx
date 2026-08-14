@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, Package, Download, Barcode, History } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { getAll, insert, updateById } from '../database/sql-wrapper';
 import { useCrud } from '../hooks/useCrud';
 import type { Product, Category, Supplier } from '../database/types';
@@ -9,7 +11,6 @@ import { SearchBar } from '../components/SearchBar';
 import { EmptyState } from '../components/EmptyState';
 import { BarcodeLabel } from '../components/BarcodeLabel';
 import { PriceHistoryModal } from '../components/PriceHistoryModal';
-import { exportToCsv } from '../utils/export';
 
 type ProductForm = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -115,14 +116,26 @@ export function Products() {
         await loadData();
     }
 
-    function handleExportCsv() {
-        const headers = ['Nome', 'SKU', 'Categoria', 'Preço', 'Custo', 'Quantidade', 'Mínimo', 'Unidade'];
-        const rows = filtered.map((p) => [
-            p.name, p.sku, getCategoryName(p.categoryId),
-            p.price.toFixed(2), p.costPrice.toFixed(2),
-            String(p.quantity), String(p.minStock), p.unit,
-        ]);
-        exportToCsv('produtos', headers, rows);
+    function handleExportPdf() {
+        const doc = new jsPDF();
+        doc.setFontSize(14);
+        doc.text('Relatório de Produtos', 14, 15);
+        doc.setFontSize(9);
+        doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 21);
+
+        autoTable(doc, {
+            startY: 26,
+            head: [['Nome', 'SKU', 'Categoria', 'Preço', 'Custo', 'Quantidade', 'Mínimo', 'Unidade']],
+            body: filtered.map((p) => [
+                p.name, p.sku, getCategoryName(p.categoryId),
+                formatCurrency(p.price), formatCurrency(p.costPrice),
+                String(p.quantity), String(p.minStock), p.unit,
+            ]),
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [79, 70, 229] },
+        });
+
+        doc.save(`produtos_${new Date().toISOString().slice(0, 10)}.pdf`);
     }
 
     function getStockBadge(p: Product) {
@@ -150,7 +163,7 @@ export function Products() {
                     </select>
                 </div>
                 <div className="toolbar-right">
-                    <button className="btn btn-secondary" onClick={handleExportCsv} title="Exportar CSV"><Download size={16} /> CSV</button>
+                    <button className="btn btn-secondary" onClick={handleExportPdf} title="Exportar PDF"><Download size={16} /> PDF</button>
                     <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Produto</button>
                 </div>
             </div>
