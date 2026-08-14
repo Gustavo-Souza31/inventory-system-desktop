@@ -1,4 +1,5 @@
-import { db } from '../database/db';
+import { getAll, insert, clearTable } from '../database/sql-wrapper';
+import type { Product, Category, Supplier, Movement, Settings, PriceHistory, Location, ProductStock } from '../database/types';
 
 // Colunas reais de cada tabela (veja electron/database.ts). Qualquer chave
 // fora dessa lista é descartada ao importar um backup — o JSON importado é
@@ -33,16 +34,22 @@ function sanitizeForImport(table: string, items: unknown): Record<string, any>[]
         });
 }
 
+async function bulkInsert(table: string, items: Record<string, any>[]): Promise<void> {
+    for (const item of items) {
+        await insert(table, item);
+    }
+}
+
 export async function exportDatabase(): Promise<void> {
     const [products, categories, suppliers, movements, settings, priceHistory, locations, productStock] = await Promise.all([
-        db.products.toArray(),
-        db.categories.toArray(),
-        db.suppliers.toArray(),
-        db.movements.toArray(),
-        db.settings.toArray(),
-        db.priceHistory.toArray(),
-        db.locations.toArray(),
-        db.productStock.toArray(),
+        getAll<Product>('products'),
+        getAll<Category>('categories'),
+        getAll<Supplier>('suppliers'),
+        getAll<Movement>('movements'),
+        getAll<Settings>('settings'),
+        getAll<PriceHistory>('priceHistory'),
+        getAll<Location>('locations'),
+        getAll<ProductStock>('productStock'),
     ]);
 
     const data = {
@@ -77,27 +84,28 @@ export async function importDatabase(file: File): Promise<{ success: boolean; me
             return { success: false, message: 'Arquivo inválido: formato não reconhecido.' };
         }
 
-        // Clear all tables
-        await Promise.all([
-            db.products.clear(),
-            db.categories.clear(),
-            db.suppliers.clear(),
-            db.movements.clear(),
-            db.settings.clear(),
-            db.priceHistory.clear(),
-            db.locations.clear(),
-            db.productStock.clear(),
-        ]);
+        // Limpa as tabelas em sequência (não em paralelo): products.categoryId
+        // tem ON DELETE RESTRICT, então products precisa ser limpo antes de
+        // categories, senão o banco bloqueia a exclusão da categoria.
+        const clearOrder = [
+            'movements', 'priceHistory', 'productStock', 'products',
+            'categories', 'suppliers', 'locations', 'settings',
+        ];
+        for (const table of clearOrder) {
+            await clearTable(table);
+        }
 
-        // Import data (cada item passa por sanitizeForImport antes de chegar no banco)
-        if (data.categories?.length) await db.categories.bulkAdd(sanitizeForImport('categories', data.categories));
-        if (data.suppliers?.length) await db.suppliers.bulkAdd(sanitizeForImport('suppliers', data.suppliers));
-        if (data.products?.length) await db.products.bulkAdd(sanitizeForImport('products', data.products));
-        if (data.movements?.length) await db.movements.bulkAdd(sanitizeForImport('movements', data.movements));
-        if (data.settings?.length) await db.settings.bulkAdd(sanitizeForImport('settings', data.settings));
-        if (data.priceHistory?.length) await db.priceHistory.bulkAdd(sanitizeForImport('priceHistory', data.priceHistory));
-        if (data.locations?.length) await db.locations.bulkAdd(sanitizeForImport('locations', data.locations));
-        if (data.productStock?.length) await db.productStock.bulkAdd(sanitizeForImport('productStock', data.productStock));
+        // Importa na ordem que respeita as FOREIGN KEYs (a tabela referenciada
+        // precisa existir antes da que referencia ela). Cada item passa por
+        // sanitizeForImport antes de chegar no banco.
+        if (data.categories?.length) await bulkInsert('categories', sanitizeForImport('categories', data.categories));
+        if (data.suppliers?.length) await bulkInsert('suppliers', sanitizeForImport('suppliers', data.suppliers));
+        if (data.locations?.length) await bulkInsert('locations', sanitizeForImport('locations', data.locations));
+        if (data.settings?.length) await bulkInsert('settings', sanitizeForImport('settings', data.settings));
+        if (data.products?.length) await bulkInsert('products', sanitizeForImport('products', data.products));
+        if (data.priceHistory?.length) await bulkInsert('priceHistory', sanitizeForImport('priceHistory', data.priceHistory));
+        if (data.movements?.length) await bulkInsert('movements', sanitizeForImport('movements', data.movements));
+        if (data.productStock?.length) await bulkInsert('productStock', sanitizeForImport('productStock', data.productStock));
 
         return {
             success: true,

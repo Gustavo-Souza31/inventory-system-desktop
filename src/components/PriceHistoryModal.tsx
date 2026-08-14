@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { db } from '../database/db';
+import { findWhere } from '../database/sql-wrapper';
 import type { PriceHistory } from '../database/types';
 import { Modal } from './Modal';
 
@@ -14,12 +14,10 @@ export function PriceHistoryModal({ productId, productName, onClose }: PriceHist
     const [history, setHistory] = useState<PriceHistory[]>([]);
 
     useEffect(() => {
-        db.priceHistory
-            .where('productId')
-            .equals(productId)
-            .reverse()
-            .sortBy('changedAt')
-            .then(setHistory);
+        findWhere<PriceHistory>('priceHistory', { productId }).then((rows) => {
+            const sorted = rows.sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime());
+            setHistory(sorted);
+        });
     }, [productId]);
 
     function formatCurrency(val: number) {
