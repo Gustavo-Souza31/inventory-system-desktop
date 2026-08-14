@@ -13,7 +13,9 @@ import {
     ShoppingCart,
     Menu,
     X,
+    LogOut,
 } from 'lucide-react';
+import { getEmail, logout } from '../database/auth';
 
 const navItems = [
     { label: 'Painel', path: '/', icon: LayoutDashboard },
@@ -86,6 +88,22 @@ export function Layout() {
                         </NavLink>
                     ))}
                 </nav>
+                <div style={{ padding: '12px 10px', borderTop: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '11px', padding: '0 8px 8px' }} className="text-muted truncate">
+                        {getEmail()}
+                    </div>
+                    <button
+                        className="sidebar-link"
+                        style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer' }}
+                        onClick={() => {
+                            logout();
+                            window.location.reload();
+                        }}
+                    >
+                        <LogOut />
+                        Sair
+                    </button>
+                </div>
             </aside>
             <div className="main-content">
                 <header className="page-header">

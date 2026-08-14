@@ -1,69 +1,70 @@
-// Define the structure of the IPC response
-interface IpcResult {
-    success: boolean;
-    rows?: any[];
-    rowCount?: number;
-    error?: string;
-}
+import { getApiUrl, getToken, logout } from './auth';
 
-// Helper to interact with main process
-async function exec(text: string, values: any[] = []): Promise<any[]> {
-    if (!(window as any).electronAPI) {
-        throw new Error("O banco SQL exige execução via aplicativo Desktop. Rode 'npm run electron:dev'.");
+// Camada HTTP: cada uma das 6 funções abaixo chama a rota REST equivalente
+// no servidor (server/src/api.ts). Sem SQL sendo montado aqui — quem monta
+// o SQL agora é o servidor, com a whitelist de tabelas dele.
+async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
+    const token = getToken();
+    const headers: Record<string, string> = {
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    const res = await fetch(`${getApiUrl()}${path}`, { ...options, headers });
+
+    if (res.status === 401) {
+        // Sessão expirada ou token inválido: desloga e avisa o App.tsx
+        // pra voltar pra tela de login.
+        logout();
+        window.dispatchEvent(new Event('auth:unauthorized'));
+        throw new Error('Sessão expirada. Faça login novamente.');
     }
-    const res: IpcResult = await (window as any).electronAPI.invoke('db:query', { text, values });
-    if (!res.success) {
-        console.error("SQL Error:", res.error, text, values);
-        throw new Error(res.error);
+
+    if (res.status === 404) return null;
+
+    const data = res.status === 204 ? null : await res.json();
+    if (!res.ok) {
+        throw new Error(data?.error || `Erro ${res.status}`);
     }
-    return res.rows || [];
+    return data;
 }
 
 export async function getAll<T>(table: string): Promise<T[]> {
-    return await exec(`SELECT * FROM "${table}"`);
+    return await apiFetch(`/api/${table}`);
 }
 
 export async function getById<T>(table: string, id: number): Promise<T | undefined> {
-    const rows = await exec(`SELECT * FROM "${table}" WHERE id = ? LIMIT 1`, [id]);
-    return rows[0];
+    const row = await apiFetch(`/api/${table}/${id}`);
+    return row ?? undefined;
 }
 
 export async function findWhere<T>(table: string, query: Record<string, any>): Promise<T[]> {
-    const cols = Object.keys(query);
-    const vals = Object.values(query);
-    const where = cols.map((k) => `"${k}" = ?`).join(' AND ');
-    return await exec(`SELECT * FROM "${table}" WHERE ${where}`, vals);
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) {
+        params.set(k, String(v));
+    }
+    return await apiFetch(`/api/${table}?${params.toString()}`);
 }
 
 export async function insert(table: string, item: Record<string, any>): Promise<number> {
-    const entries = Object.entries(item).filter(([k]) => k !== 'id');
-    const cols = entries.map(([k]) => `"${k}"`);
-    const placeholders = entries.map(() => '?');
-    const vals = entries.map(([, v]) => v);
-    const sql = `INSERT INTO "${table}" (${cols.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING id`;
-    const rows = await exec(sql, vals);
-    return rows[0].id;
+    const res = await apiFetch(`/api/${table}`, {
+        method: 'POST',
+        body: JSON.stringify(item),
+    });
+    return res.id;
 }
 
 export async function updateById(table: string, id: number, changes: Record<string, any>): Promise<void> {
-    const entries = Object.entries(changes).filter(([k]) => k !== 'id');
-    const sets = entries.map(([k]) => `"${k}" = ?`);
-    const vals = entries.map(([, v]) => v);
-    vals.push(id);
-    await exec(`UPDATE "${table}" SET ${sets.join(', ')} WHERE id = ?`, vals);
+    await apiFetch(`/api/${table}/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(changes),
+    });
 }
 
 export async function deleteById(table: string, id: number): Promise<void> {
-    await exec(`DELETE FROM "${table}" WHERE id = ?`, [id]);
+    await apiFetch(`/api/${table}/${id}`, { method: 'DELETE' });
 }
 
 export async function clearTable(table: string): Promise<void> {
-    await exec(`DELETE FROM "${table}"`);
-    try {
-        // sqlite_sequence só existe depois do primeiro INSERT em alguma
-        // tabela AUTOINCREMENT; se ainda não existir, não há nada a resetar.
-        await exec(`DELETE FROM sqlite_sequence WHERE name = ?`, [table]);
-    } catch {
-        // nada a resetar
-    }
+    await apiFetch(`/api/${table}`, { method: 'DELETE' });
 }

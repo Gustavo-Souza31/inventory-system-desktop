@@ -1,5 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { Login } from './components/Login';
+import { isAuthenticated } from './database/auth';
 import { Dashboard } from './pages/Dashboard';
 import { Products } from './pages/Products';
 import { Categories } from './pages/Categories';
@@ -11,15 +14,18 @@ import { Locations } from './pages/Locations';
 import { Sales } from './pages/Sales';
 
 function App() {
-  if (!(window as any).electronAPI) {
-    return (
-      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', padding: '20px', textAlign: 'center' }}>
-        <div style={{ color: 'var(--text-muted)' }}>
-          Para usar o banco de dados, você precisa rodar o App no modo Desktop (Electron).
-          Se estiver desenvolvendo, rode: npm run electron:dev
-        </div>
-      </div>
-    );
+  const [authed, setAuthed] = useState(isAuthenticated());
+
+  useEffect(() => {
+    function handleUnauthorized() {
+      setAuthed(false);
+    }
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
+  if (!authed) {
+    return <Login onSuccess={() => setAuthed(true)} />;
   }
 
   return (
