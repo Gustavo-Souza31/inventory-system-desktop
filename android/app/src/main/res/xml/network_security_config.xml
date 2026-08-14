@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Permite tráfego HTTP puro (sem TLS) durante o desenvolvimento, porque o
+    servidor (server/) ainda roda em localhost/rede local sem certificado.
+    Quando o servidor estiver hospedado com HTTPS (Fase 5), isso deixa de
+    ser necessário e pode ser removido — cleartextTrafficPermitted="true"
+    NÃO deve ir para uma versão publicada na Play Store apontando pra um
+    servidor sem HTTPS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
