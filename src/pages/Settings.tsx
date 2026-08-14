@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { Save, Download, Upload, CheckCircle, AlertCircle } from 'lucide-react';
-import { db } from '../database/db';
+import { getAll, insert, updateById, clearTable } from '../database/sql-wrapper';
 import type { Settings as SettingsType } from '../database/types';
 import { exportDatabase, importDatabase } from '../utils/backup';
+
+// Todas as tabelas do banco (electron/database.ts), usado só pelo botão
+// "Limpar Todos os Dados" abaixo.
+const ALL_TABLES = [
+    'movements', 'priceHistory', 'productStock', 'products',
+    'categories', 'suppliers', 'locations', 'settings',
+];
 
 export function Settings() {
     const [settings, setSettings] = useState<SettingsType>({
@@ -16,22 +23,22 @@ export function Settings() {
 
     useEffect(() => {
         async function load() {
-            const s = await db.settings.toCollection().first();
+            const [s] = await getAll<SettingsType & { id: number }>('settings');
             if (s) setSettings(s);
         }
         load();
     }, []);
 
     async function handleSave() {
-        const existing = await db.settings.toCollection().first();
+        const [existing] = await getAll<SettingsType & { id: number }>('settings');
         if (existing?.id) {
-            await db.settings.update(existing.id, {
+            await updateById('settings', existing.id, {
                 companyName: settings.companyName,
                 cnpj: settings.cnpj,
                 lowStockThreshold: settings.lowStockThreshold,
             });
         } else {
-            await db.settings.add(settings);
+            await insert('settings', settings);
         }
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
@@ -48,7 +55,7 @@ export function Settings() {
         setImportMsg(result);
         e.target.value = '';
         if (result.success) {
-            const s = await db.settings.toCollection().first();
+            const [s] = await getAll<SettingsType & { id: number }>('settings');
             if (s) setSettings(s);
         }
         setTimeout(() => setImportMsg(null), 5000);
@@ -113,13 +120,15 @@ export function Settings() {
             <div className="card" style={{ marginBottom: '20px' }}>
                 <div className="section-title" style={{ marginBottom: '16px' }}>Banco de Dados</div>
                 <p style={{ fontSize: '13px', marginBottom: '12px' }} className="text-muted">
-                    Os dados são salvos localmente no seu computador usando IndexedDB.
+                    Os dados são salvos localmente no seu computador em um arquivo SQLite.
                 </p>
                 <button
                     className="btn btn-danger btn-sm"
                     onClick={async () => {
                         if (window.confirm('⚠️ Isto irá apagar TODOS os dados. Tem certeza?')) {
-                            await db.delete();
+                            for (const table of ALL_TABLES) {
+                                await clearTable(table);
+                            }
                             window.location.reload();
                         }
                     }}

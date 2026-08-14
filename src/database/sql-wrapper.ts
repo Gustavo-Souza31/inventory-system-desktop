@@ -249,3 +249,14 @@ export async function updateById(table: string, id: number, changes: Record<stri
 export async function deleteById(table: string, id: number): Promise<void> {
     await exec(`DELETE FROM "${table}" WHERE id = ?`, [id]);
 }
+
+export async function clearTable(table: string): Promise<void> {
+    await exec(`DELETE FROM "${table}"`);
+    try {
+        // sqlite_sequence só existe depois do primeiro INSERT em alguma
+        // tabela AUTOINCREMENT; se ainda não existir, não há nada a resetar.
+        await exec(`DELETE FROM sqlite_sequence WHERE name = ?`, [table]);
+    } catch {
+        // nada a resetar
+    }
+}
