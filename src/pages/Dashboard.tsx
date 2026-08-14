@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Package, DollarSign, AlertTriangle, ArrowLeftRight, TrendingDown, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
-import { db } from '../database/db';
+import { getAll } from '../database/sql-wrapper';
 import type { Product, Movement, Category } from '../database/types';
 import { StatsCard } from '../components/StatsCard';
 
@@ -17,8 +17,8 @@ export function Dashboard() {
     }, []);
 
     async function loadData() {
-        const allProducts = await db.products.toArray();
-        const allCategories = await db.categories.toArray();
+        const allProducts = await getAll<Product>('products');
+        const allCategories = await getAll<Category>('categories');
         setProducts(allProducts);
         setCategories(allCategories);
 
@@ -30,24 +30,23 @@ export function Dashboard() {
         const value = allProducts.reduce((sum, p) => sum + p.price * p.quantity, 0);
         setTotalValue(value);
 
+        const allMovements = await getAll<Movement>('movements');
+
         // This month's movements
         const now = new Date();
         const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const allMovements = await db.movements
-            .where('date')
-            .aboveOrEqual(firstOfMonth)
-            .toArray();
-        setMonthMovements(allMovements.length);
+        const monthCount = allMovements.filter((m) => new Date(m.date) >= firstOfMonth).length;
+        setMonthMovements(monthCount);
 
         // Recent movements (last 10)
-        const recent = await db.movements.orderBy('date').reverse().limit(10).toArray();
-        const enriched = await Promise.all(
-            recent.map(async (m) => {
-                const product = await db.products.get(m.productId);
-                return { ...m, productName: product?.name || 'Produto removido' };
-            })
-        );
-        setMovements(enriched);
+        const recent = [...allMovements]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 10)
+            .map((m) => ({
+                ...m,
+                productName: allProducts.find((p) => p.id === m.productId)?.name || 'Produto removido',
+            }));
+        setMovements(recent);
     }
 
     function getCategoryName(categoryId: number) {
