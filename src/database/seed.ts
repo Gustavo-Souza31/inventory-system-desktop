@@ -1,28 +1,34 @@
-import { db } from './db';
+import { getAll, insert } from './sql-wrapper';
+
+async function bulkInsert(table: string, items: Record<string, any>[]): Promise<void> {
+    for (const item of items) {
+        await insert(table, item);
+    }
+}
 
 export async function seedDatabase() {
-    const count = await db.categories.count();
-    if (count > 0) return;
+    const categories = await getAll('categories');
+    if (categories.length > 0) return;
 
     // Categories
     const catIds: number[] = [];
-    catIds.push(await db.categories.add({ name: 'Eletrônicos', description: 'Dispositivos e componentes eletrônicos', color: '#6c5ce7', createdAt: new Date() }));
-    catIds.push(await db.categories.add({ name: 'Acessórios', description: 'Acessórios diversos para produtos', color: '#00c9a7', createdAt: new Date() }));
-    catIds.push(await db.categories.add({ name: 'Cabos', description: 'Cabos e conectores', color: '#ffc53d', createdAt: new Date() }));
-    catIds.push(await db.categories.add({ name: 'Periféricos', description: 'Mouse, teclado e outros periféricos', color: '#4ea8de', createdAt: new Date() }));
-    catIds.push(await db.categories.add({ name: 'Armazenamento', description: 'HDs, SSDs e pen drives', color: '#ff6b6b', createdAt: new Date() }));
+    catIds.push(await insert('categories', { name: 'Eletrônicos', description: 'Dispositivos e componentes eletrônicos', color: '#6c5ce7', createdAt: new Date() }));
+    catIds.push(await insert('categories', { name: 'Acessórios', description: 'Acessórios diversos para produtos', color: '#00c9a7', createdAt: new Date() }));
+    catIds.push(await insert('categories', { name: 'Cabos', description: 'Cabos e conectores', color: '#ffc53d', createdAt: new Date() }));
+    catIds.push(await insert('categories', { name: 'Periféricos', description: 'Mouse, teclado e outros periféricos', color: '#4ea8de', createdAt: new Date() }));
+    catIds.push(await insert('categories', { name: 'Armazenamento', description: 'HDs, SSDs e pen drives', color: '#ff6b6b', createdAt: new Date() }));
 
     // Suppliers
     const supIds: number[] = [];
-    supIds.push(await db.suppliers.add({ name: 'TechDistribuidora LTDA', email: 'contato@techdist.com.br', phone: '(11) 98765-4321', address: 'Rua das Tecnologias, 100 - São Paulo, SP', notes: 'Fornecedor principal de eletrônicos', createdAt: new Date() }));
-    supIds.push(await db.suppliers.add({ name: 'CaboMaster', email: 'vendas@cabomaster.com.br', phone: '(21) 91234-5678', address: 'Av. dos Cabos, 500 - Rio de Janeiro, RJ', notes: 'Especialista em cabos e conectores', createdAt: new Date() }));
-    supIds.push(await db.suppliers.add({ name: 'InfoParts Brasil', email: 'compras@infoparts.com.br', phone: '(31) 99876-5432', address: 'Rua da Informática, 250 - Belo Horizonte, MG', notes: '', createdAt: new Date() }));
+    supIds.push(await insert('suppliers', { name: 'TechDistribuidora LTDA', email: 'contato@techdist.com.br', phone: '(11) 98765-4321', address: 'Rua das Tecnologias, 100 - São Paulo, SP', notes: 'Fornecedor principal de eletrônicos', createdAt: new Date() }));
+    supIds.push(await insert('suppliers', { name: 'CaboMaster', email: 'vendas@cabomaster.com.br', phone: '(21) 91234-5678', address: 'Av. dos Cabos, 500 - Rio de Janeiro, RJ', notes: 'Especialista em cabos e conectores', createdAt: new Date() }));
+    supIds.push(await insert('suppliers', { name: 'InfoParts Brasil', email: 'compras@infoparts.com.br', phone: '(31) 99876-5432', address: 'Rua da Informática, 250 - Belo Horizonte, MG', notes: '', createdAt: new Date() }));
 
     // Locations
     const locIds: number[] = [];
-    locIds.push(await db.locations.add({ name: 'Depósito Principal', address: 'Rua do Estoque, 100', description: 'Depósito central', createdAt: new Date() }));
-    locIds.push(await db.locations.add({ name: 'Loja Centro', address: 'Av. Principal, 500', description: 'Loja física no centro', createdAt: new Date() }));
-    locIds.push(await db.locations.add({ name: 'Escritório', address: 'Rua Comercial, 200', description: 'Estoque do escritório', createdAt: new Date() }));
+    locIds.push(await insert('locations', { name: 'Depósito Principal', address: 'Rua do Estoque, 100', description: 'Depósito central', createdAt: new Date() }));
+    locIds.push(await insert('locations', { name: 'Loja Centro', address: 'Av. Principal, 500', description: 'Loja física no centro', createdAt: new Date() }));
+    locIds.push(await insert('locations', { name: 'Escritório', address: 'Rua Comercial, 200', description: 'Estoque do escritório', createdAt: new Date() }));
 
     // Products
     const now = new Date();
@@ -41,7 +47,7 @@ export async function seedDatabase() {
 
     const productIds: number[] = [];
     for (const p of products) {
-        productIds.push(await db.products.add(p));
+        productIds.push(await insert('products', p));
     }
 
     // Product stock distribution across locations
@@ -63,7 +69,7 @@ export async function seedDatabase() {
         { productId: productIds[9], locationId: locIds[0], quantity: 25 },
         { productId: productIds[9], locationId: locIds[1], quantity: 15 },
     ];
-    await db.productStock.bulkAdd(stockDistribution);
+    await bulkInsert('productStock', stockDistribution);
 
     // Movements
     const movements = [
@@ -78,17 +84,17 @@ export async function seedDatabase() {
         { productId: productIds[8], type: 'saida' as const, quantity: 10, reason: 'Venda', notes: 'Pedido #004', locationId: null, date: daysAgo(4), createdAt: daysAgo(4) },
         { productId: productIds[6], type: 'entrada' as const, quantity: 30, reason: 'Reposição', notes: '', locationId: locIds[0], date: daysAgo(6), createdAt: daysAgo(6) },
     ];
-    await db.movements.bulkAdd(movements);
+    await bulkInsert('movements', movements);
 
     // Settings
-    await db.settings.add({
+    await insert('settings', {
         companyName: 'Minha Empresa LTDA',
         cnpj: '12.345.678/0001-90',
         lowStockThreshold: 10,
     });
 
     // Price history seed
-    await db.priceHistory.bulkAdd([
+    await bulkInsert('priceHistory', [
         { productId: productIds[0], oldPrice: 129.90, newPrice: 149.90, oldCostPrice: 80.00, newCostPrice: 85.00, changedAt: daysAgo(30) },
         { productId: productIds[4], oldPrice: 399.90, newPrice: 449.90, oldCostPrice: 250.00, newCostPrice: 280.00, changedAt: daysAgo(20) },
         { productId: productIds[8], oldPrice: 299.90, newPrice: 349.90, oldCostPrice: 180.00, newCostPrice: 200.00, changedAt: daysAgo(15) },
