@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import {
     ShoppingCart, Search, Plus, Minus, Trash2, CheckCircle, X, Printer, DollarSign, Package,
 } from 'lucide-react';
-import { db } from '../database/db';
-import type { Product, Location } from '../database/types';
+import { getAll, findWhere, insert, updateById } from '../database/sql-wrapper';
+import type { Product, Location, ProductStock } from '../database/types';
 
 interface CartItem {
     product: Product;
@@ -32,8 +32,8 @@ export function Sales() {
     }, []);
 
     async function loadData() {
-        setProducts(await db.products.toArray());
-        setLocations(await db.locations.toArray());
+        setProducts(await getAll<Product>('products'));
+        setLocations(await getAll<Location>('locations'));
     }
 
     const filtered = search.length >= 1
@@ -101,7 +101,7 @@ export function Sales() {
 
         for (const item of cart) {
             // Create a movement (saida) for each item
-            await db.movements.add({
+            await insert('movements', {
                 productId: item.product.id!,
                 type: 'saida',
                 quantity: item.quantity,
@@ -113,18 +113,19 @@ export function Sales() {
             });
 
             // Update product quantity
-            await db.products.update(item.product.id!, {
+            await updateById('products', item.product.id!, {
                 quantity: Math.max(0, item.product.quantity - item.quantity),
                 updatedAt: now,
             });
 
             // Update location stock if applicable
             if (selectedLocation) {
-                const stock = await db.productStock
-                    .where({ productId: item.product.id!, locationId: selectedLocation })
-                    .first();
+                const [stock] = await findWhere<ProductStock>('productStock', {
+                    productId: item.product.id!,
+                    locationId: selectedLocation,
+                });
                 if (stock) {
-                    await db.productStock.update(stock.id!, {
+                    await updateById('productStock', stock.id!, {
                         quantity: Math.max(0, stock.quantity - item.quantity),
                     });
                 }
