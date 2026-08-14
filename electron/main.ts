@@ -1,7 +1,27 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu } from "electron";
 import path from "path";
 
 let mainWindow: BrowserWindow | null = null;
+
+function buildMenu() {
+  const isMac = process.platform === "darwin";
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? [{ role: "appMenu" as const }] : []),
+    { role: "fileMenu" },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+    {
+      label: "Sair",
+      click: () => {
+        mainWindow?.webContents.executeJavaScript(
+          "localStorage.removeItem('authToken'); localStorage.removeItem('authEmail'); location.reload();"
+        );
+      },
+    },
+  ];
+  return Menu.buildFromTemplate(template);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -25,6 +45,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(buildMenu());
   createWindow();
 
   app.on("activate", () => {
