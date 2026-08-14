@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { BarChart3, Package, DollarSign, TrendingUp, ArrowDownCircle, ArrowUpCircle, Download, Calendar } from 'lucide-react';
-import { db } from '../database/db';
+import { getAll } from '../database/sql-wrapper';
 import type { Product, Category, Movement } from '../database/types';
 import { StatsCard } from '../components/StatsCard';
 import { exportToCsv } from '../utils/export';
@@ -55,9 +55,10 @@ export function Reports() {
 
     useEffect(() => {
         async function load() {
-            setProducts(await db.products.toArray());
-            setCategories(await db.categories.toArray());
-            setAllMovements(await db.movements.orderBy('date').reverse().toArray());
+            setProducts(await getAll<Product>('products'));
+            setCategories(await getAll<Category>('categories'));
+            const movs = await getAll<Movement>('movements');
+            setAllMovements(movs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
         }
         load();
     }, []);
