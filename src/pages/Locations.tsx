@@ -130,7 +130,7 @@ export function Locations() {
                                                     <tr key={s.id}>
                                                         <td style={{ fontWeight: 500 }}>{s.productName}</td>
                                                         <td className="font-mono text-muted">{s.productSku}</td>
-                                                        <td style={{ textAlign: 'right', fontWeight: 600 }}>{s.quantity}</td>
+                                                        <td style={{ textAlign: 'right', fontWeight: 600 }} className="tabular-nums">{s.quantity}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>

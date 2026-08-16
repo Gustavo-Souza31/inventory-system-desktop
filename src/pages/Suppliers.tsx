@@ -60,7 +60,7 @@ export function Suppliers() {
                                 <tr key={s.id}>
                                     <td style={{ fontWeight: 500 }}>{s.name}</td>
                                     <td className="text-muted">{s.email || '-'}</td>
-                                    <td className="text-muted">{s.phone || '-'}</td>
+                                    <td className="text-muted tabular-nums">{s.phone || '-'}</td>
                                     <td className="text-muted truncate" style={{ maxWidth: '250px' }} title={s.address}>{s.address || '-'}</td>
                                     <td>
                                         <div className="table-actions">

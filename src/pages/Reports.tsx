@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { BarChart3, Package, DollarSign, TrendingUp, ArrowDownCircle, ArrowUpCircle, Download, Calendar } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { getAll } from '../database/sql-wrapper';
 import type { Product, Category, Movement } from '../database/types';
 import { StatsCard } from '../components/StatsCard';
-import { exportToCsv } from '../utils/export';
 
 type Period = '7d' | '30d' | 'week' | 'month' | 'all';
 
@@ -129,31 +130,61 @@ export function Reports() {
         return categories.find((c) => c.id === id)?.name || '-';
     }
 
-    function handleExportCsv() {
+    function handleExportPdf() {
+        const doc = new jsPDF();
+        doc.setFontSize(9);
+
         if (activeTab === 'stock') {
-            const headers = ['Produto', 'SKU', 'Categoria', 'Quantidade', 'Mínimo', 'Status', 'Valor Total'];
-            const rows = products.sort((a, b) => a.quantity - b.quantity).map((p) => [
-                p.name, p.sku, getCategoryName(p.categoryId), String(p.quantity), String(p.minStock),
-                p.quantity === 0 ? 'Sem estoque' : p.quantity <= p.minStock ? 'Baixo' : 'OK',
-                (p.price * p.quantity).toFixed(2),
-            ]);
-            exportToCsv('relatorio_estoque', headers, rows);
+            doc.setFontSize(14);
+            doc.text('Relatório de Estoque Atual', 14, 15);
+            doc.setFontSize(9);
+            doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 21);
+            autoTable(doc, {
+                startY: 26,
+                head: [['Produto', 'SKU', 'Categoria', 'Quantidade', 'Mínimo', 'Status', 'Valor Total']],
+                body: products.sort((a, b) => a.quantity - b.quantity).map((p) => [
+                    p.name, p.sku, getCategoryName(p.categoryId), String(p.quantity), String(p.minStock),
+                    p.quantity === 0 ? 'Sem estoque' : p.quantity <= p.minStock ? 'Baixo' : 'OK',
+                    formatCurrency(p.price * p.quantity),
+                ]),
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [191, 64, 13] },
+            });
+            doc.save(`relatorio_estoque_${new Date().toISOString().slice(0, 10)}.pdf`);
         } else if (activeTab === 'movements') {
-            const headers = ['Data', 'Produto', 'Tipo', 'Quantidade', 'Motivo'];
-            const rows = movements.map((m) => [
-                new Date(m.date).toLocaleDateString('pt-BR'),
-                products.find((p) => p.id === m.productId)?.name || 'Removido',
-                m.type === 'entrada' ? 'Entrada' : 'Saída',
-                String(m.quantity), m.reason,
-            ]);
-            exportToCsv('relatorio_movimentacoes', headers, rows);
+            doc.setFontSize(14);
+            doc.text('Relatório de Movimentações', 14, 15);
+            doc.setFontSize(9);
+            doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} — ${periodLabels[period]}`, 14, 21);
+            autoTable(doc, {
+                startY: 26,
+                head: [['Data', 'Produto', 'Tipo', 'Quantidade', 'Motivo']],
+                body: movements.map((m) => [
+                    new Date(m.date).toLocaleDateString('pt-BR'),
+                    products.find((p) => p.id === m.productId)?.name || 'Removido',
+                    m.type === 'entrada' ? 'Entrada' : 'Saída',
+                    String(m.quantity), m.reason,
+                ]),
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [191, 64, 13] },
+            });
+            doc.save(`relatorio_movimentacoes_${new Date().toISOString().slice(0, 10)}.pdf`);
         } else if (activeTab === 'value') {
-            const headers = ['Categoria', 'Produtos', 'Itens', 'Valor Total', '% do Inventário'];
-            const rows = categoryValues.map((c) => [
-                c.name, String(c.productCount), String(c.totalQty), c.totalVal.toFixed(2),
-                totalSaleValue > 0 ? ((c.totalVal / totalSaleValue) * 100).toFixed(1) + '%' : '0%',
-            ]);
-            exportToCsv('relatorio_valor', headers, rows);
+            doc.setFontSize(14);
+            doc.text('Relatório de Valor do Inventário', 14, 15);
+            doc.setFontSize(9);
+            doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 21);
+            autoTable(doc, {
+                startY: 26,
+                head: [['Categoria', 'Produtos', 'Itens', 'Valor Total', '% do Inventário']],
+                body: categoryValues.map((c) => [
+                    c.name, String(c.productCount), String(c.totalQty), formatCurrency(c.totalVal),
+                    totalSaleValue > 0 ? ((c.totalVal / totalSaleValue) * 100).toFixed(1) + '%' : '0%',
+                ]),
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [191, 64, 13] },
+            });
+            doc.save(`relatorio_valor_${new Date().toISOString().slice(0, 10)}.pdf`);
         }
     }
 
@@ -184,7 +215,7 @@ export function Reports() {
                 </div>
                 <div className="toolbar-right">
                     {activeTab !== 'dashboard' && (
-                        <button className="btn btn-secondary btn-sm" onClick={handleExportCsv}><Download size={14} /> CSV</button>
+                        <button className="btn btn-secondary btn-sm" onClick={handleExportPdf}><Download size={14} /> PDF</button>
                     )}
                 </div>
             </div>
@@ -227,15 +258,15 @@ export function Reports() {
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                             <div style={{ textAlign: 'center', padding: '12px', background: 'var(--bg-secondary)', borderRadius: 'var(--border-radius-sm)' }}>
-                                <div style={{ fontSize: '20px', fontWeight: 700 }}>{movements.length}</div>
+                                <div className="tabular-nums" style={{ fontSize: '20px', fontWeight: 700 }}>{movements.length}</div>
                                 <div style={{ fontSize: '11px' }} className="text-muted">Total</div>
                             </div>
                             <div style={{ textAlign: 'center', padding: '12px', background: 'var(--success-bg)', borderRadius: 'var(--border-radius-sm)' }}>
-                                <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--success)' }}>+{totalEntradas}</div>
+                                <div className="tabular-nums" style={{ fontSize: '20px', fontWeight: 700, color: 'var(--success)' }}>+{totalEntradas}</div>
                                 <div style={{ fontSize: '11px' }} className="text-muted">Entradas</div>
                             </div>
                             <div style={{ textAlign: 'center', padding: '12px', background: 'var(--danger-bg)', borderRadius: 'var(--border-radius-sm)' }}>
-                                <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--danger)' }}>-{totalSaidas}</div>
+                                <div className="tabular-nums" style={{ fontSize: '20px', fontWeight: 700, color: 'var(--danger)' }}>-{totalSaidas}</div>
                                 <div style={{ fontSize: '11px' }} className="text-muted">Saídas</div>
                             </div>
                         </div>
@@ -249,8 +280,14 @@ export function Reports() {
                             )}
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '11px' }} className="text-muted">
-                            <span>🟢 Entradas {totalEntradas + totalSaidas > 0 ? ((totalEntradas / (totalEntradas + totalSaidas)) * 100).toFixed(0) : 0}%</span>
-                            <span>🔴 Saídas {totalEntradas + totalSaidas > 0 ? ((totalSaidas / (totalEntradas + totalSaidas)) * 100).toFixed(0) : 0}%</span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
+                                Entradas <span className="tabular-nums">{totalEntradas + totalSaidas > 0 ? ((totalEntradas / (totalEntradas + totalSaidas)) * 100).toFixed(0) : 0}%</span>
+                            </span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--danger)', display: 'inline-block' }} />
+                                Saídas <span className="tabular-nums">{totalEntradas + totalSaidas > 0 ? ((totalSaidas / (totalEntradas + totalSaidas)) * 100).toFixed(0) : 0}%</span>
+                            </span>
                         </div>
                     </div>
 
@@ -275,7 +312,7 @@ export function Reports() {
                                                     <div style={{ width: `${(p.saidas / maxTotal) * 100}%`, background: 'var(--danger)', borderRadius: '3px' }} />
                                                 </div>
                                             </div>
-                                            <div style={{ textAlign: 'right', flexShrink: 0, fontSize: '12px' }}>
+                                            <div className="tabular-nums" style={{ textAlign: 'right', flexShrink: 0, fontSize: '12px' }}>
                                                 <span className="text-success">+{p.entradas}</span>
                                                 {' / '}
                                                 <span className="text-danger">-{p.saidas}</span>
@@ -300,7 +337,7 @@ export function Reports() {
                                 {movementsByReason.map(([reason, data]) => (
                                     <div key={reason} className="list-item">
                                         <div style={{ flex: 1, fontSize: '13px' }}>{reason}</div>
-                                        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', flexShrink: 0 }}>
+                                        <div className="tabular-nums" style={{ display: 'flex', gap: '12px', fontSize: '12px', flexShrink: 0 }}>
                                             <span className="badge badge-purple">{data.count}x</span>
                                             <span style={{ fontWeight: 600 }}>{data.qty} un</span>
                                         </div>
@@ -327,7 +364,7 @@ export function Reports() {
                                     <div key={item.label}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '4px' }}>
                                             <span>{item.label}</span>
-                                            <span style={{ fontWeight: 600, color: item.color }}>{item.count} ({pct.toFixed(0)}%)</span>
+                                            <span className="tabular-nums" style={{ fontWeight: 600, color: item.color }}>{item.count} ({pct.toFixed(0)}%)</span>
                                         </div>
                                         <div style={{ height: '8px', background: 'var(--bg-secondary)', borderRadius: '4px', overflow: 'hidden' }}>
                                             <div style={{ height: '100%', width: `${pct}%`, background: item.color, borderRadius: '4px', transition: 'width 300ms ease' }} />
@@ -361,14 +398,14 @@ export function Reports() {
                                     <td style={{ fontWeight: 500 }}>{p.name}</td>
                                     <td className="font-mono text-muted">{p.sku}</td>
                                     <td className="text-muted">{getCategoryName(p.categoryId)}</td>
-                                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{p.quantity} {p.unit}</td>
-                                    <td style={{ textAlign: 'right' }} className="text-muted">{p.minStock}</td>
+                                    <td style={{ textAlign: 'right', fontWeight: 600 }} className="tabular-nums">{p.quantity} {p.unit}</td>
+                                    <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">{p.minStock}</td>
                                     <td>
                                         {p.quantity === 0 ? <span className="badge badge-danger">Sem estoque</span> :
                                             p.quantity <= p.minStock ? <span className="badge badge-warning">Baixo</span> :
                                                 <span className="badge badge-success">OK</span>}
                                     </td>
-                                    <td style={{ textAlign: 'right' }}>{formatCurrency(p.price * p.quantity)}</td>
+                                    <td style={{ textAlign: 'right' }} className="tabular-nums">{formatCurrency(p.price * p.quantity)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -412,7 +449,7 @@ export function Reports() {
                                                 {m.type === 'entrada' ? 'Entrada' : 'Saída'}
                                             </span>
                                         </td>
-                                        <td style={{ textAlign: 'right', fontWeight: 600 }} className={m.type === 'entrada' ? 'text-success' : 'text-danger'}>
+                                        <td style={{ textAlign: 'right', fontWeight: 600 }} className={`tabular-nums ${m.type === 'entrada' ? 'text-success' : 'text-danger'}`}>
                                             {m.type === 'entrada' ? '+' : '-'}{m.quantity}
                                         </td>
                                         <td className="text-muted">{m.reason || '-'}</td>
@@ -446,20 +483,20 @@ export function Reports() {
                                             <span style={{ fontWeight: 500 }}>{c.name}</span>
                                         </div>
                                     </td>
-                                    <td style={{ textAlign: 'right' }}>{c.productCount}</td>
-                                    <td style={{ textAlign: 'right' }}>{c.totalQty}</td>
-                                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(c.totalVal)}</td>
-                                    <td style={{ textAlign: 'right' }} className="text-muted">
+                                    <td style={{ textAlign: 'right' }} className="tabular-nums">{c.productCount}</td>
+                                    <td style={{ textAlign: 'right' }} className="tabular-nums">{c.totalQty}</td>
+                                    <td style={{ textAlign: 'right', fontWeight: 600 }} className="tabular-nums">{formatCurrency(c.totalVal)}</td>
+                                    <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">
                                         {totalSaleValue > 0 ? ((c.totalVal / totalSaleValue) * 100).toFixed(1) : '0.0'}%
                                     </td>
                                 </tr>
                             ))}
                             <tr style={{ background: 'var(--bg-secondary)' }}>
                                 <td style={{ fontWeight: 700 }}>Total</td>
-                                <td style={{ textAlign: 'right', fontWeight: 700 }}>{products.length}</td>
-                                <td style={{ textAlign: 'right', fontWeight: 700 }}>{totalItems}</td>
-                                <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatCurrency(totalSaleValue)}</td>
-                                <td style={{ textAlign: 'right', fontWeight: 700 }}>100%</td>
+                                <td style={{ textAlign: 'right', fontWeight: 700 }} className="tabular-nums">{products.length}</td>
+                                <td style={{ textAlign: 'right', fontWeight: 700 }} className="tabular-nums">{totalItems}</td>
+                                <td style={{ textAlign: 'right', fontWeight: 700 }} className="tabular-nums">{formatCurrency(totalSaleValue)}</td>
+                                <td style={{ textAlign: 'right', fontWeight: 700 }} className="tabular-nums">100%</td>
                             </tr>
                         </tbody>
                     </table>

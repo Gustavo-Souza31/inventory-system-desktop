@@ -57,7 +57,7 @@ export function Categories() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
                     {categories.map((c) => (
                         <div key={c.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px 18px' }}>
-                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: c.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: c.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <Tags size={18} style={{ color: c.color }} />
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -91,7 +91,7 @@ export function Categories() {
                         <label className="form-label">Cor</label>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             {COLORS.map((color) => (
-                                <div key={color} onClick={() => setForm({ ...form, color })} style={{ width: '32px', height: '32px', borderRadius: '8px', background: color, cursor: 'pointer', border: form.color === color ? '3px solid white' : '3px solid transparent', transition: 'border var(--transition-fast)' }} />
+                                <div key={color} onClick={() => setForm({ ...form, color })} style={{ width: '32px', height: '32px', borderRadius: '8px', background: color, cursor: 'pointer', border: form.color === color ? '3px solid var(--text-primary)' : '3px solid transparent', transition: 'border var(--transition-fast)' }} />
                             ))}
                         </div>
                     </div>

@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { getAll, getById, findWhere, insert, updateById } from '../database/sql-wrapper';
 import type { Product, Movement, Location, ProductStock } from '../database/types';
 import { Modal } from '../components/Modal';
 import { EmptyState } from '../components/EmptyState';
 import { SearchBar } from '../components/SearchBar';
-import { exportToCsv } from '../utils/export';
 
 export function Movements() {
     const [movements, setMovements] = useState<(Movement & { productName?: string; locationName?: string })[]>([]);
@@ -113,14 +114,26 @@ export function Movements() {
         }
     }
 
-    function handleExportCsv() {
-        const headers = ['Data', 'Produto', 'Tipo', 'Quantidade', 'Motivo', 'Local', 'Observações'];
-        const rows = filtered.map((m) => [
-            new Date(m.date).toLocaleDateString('pt-BR'),
-            m.productName || '', m.type === 'entrada' ? 'Entrada' : 'Saída',
-            String(m.quantity), m.reason, m.locationName || '', m.notes,
-        ]);
-        exportToCsv('movimentacoes', headers, rows);
+    function handleExportPdf() {
+        const doc = new jsPDF();
+        doc.setFontSize(14);
+        doc.text('Relatório de Movimentações', 14, 15);
+        doc.setFontSize(9);
+        doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 21);
+
+        autoTable(doc, {
+            startY: 26,
+            head: [['Data', 'Produto', 'Tipo', 'Quantidade', 'Motivo', 'Local', 'Observações']],
+            body: filtered.map((m) => [
+                new Date(m.date).toLocaleDateString('pt-BR'),
+                m.productName || '', m.type === 'entrada' ? 'Entrada' : 'Saída',
+                String(m.quantity), m.reason, m.locationName || '', m.notes,
+            ]),
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [191, 64, 13] },
+        });
+
+        doc.save(`movimentacoes_${new Date().toISOString().slice(0, 10)}.pdf`);
     }
 
     function formatDate(date: Date) {
@@ -142,7 +155,7 @@ export function Movements() {
                     </select>
                 </div>
                 <div className="toolbar-right">
-                    <button className="btn btn-secondary" onClick={handleExportCsv}><Download size={16} /> CSV</button>
+                    <button className="btn btn-secondary" onClick={handleExportPdf}><Download size={16} /> PDF</button>
                     <button className="btn btn-primary" onClick={openNew} disabled={products.length === 0}><Plus size={16} /> Nova Movimentação</button>
                 </div>
             </div>
@@ -183,7 +196,7 @@ export function Movements() {
                                             {m.type === 'entrada' ? 'Entrada' : 'Saída'}
                                         </span>
                                     </td>
-                                    <td style={{ textAlign: 'right', fontWeight: 600 }} className={m.type === 'entrada' ? 'text-success' : 'text-danger'}>
+                                    <td style={{ textAlign: 'right', fontWeight: 600 }} className={`tabular-nums ${m.type === 'entrada' ? 'text-success' : 'text-danger'}`}>
                                         {m.type === 'entrada' ? '+' : '-'}{m.quantity}
                                     </td>
                                     <td className="text-muted">{m.reason || '-'}</td>

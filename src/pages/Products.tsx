@@ -132,7 +132,7 @@ export function Products() {
                 String(p.quantity), String(p.minStock), p.unit,
             ]),
             styles: { fontSize: 8 },
-            headStyles: { fillColor: [79, 70, 229] },
+            headStyles: { fillColor: [191, 64, 13] },
         });
 
         doc.save(`produtos_${new Date().toISOString().slice(0, 10)}.pdf`);
@@ -187,7 +187,7 @@ export function Products() {
                         </thead>
                         <tbody>
                             {filtered.map((p) => (
-                                <tr key={p.id}>
+                                <tr key={p.id} style={p.quantity === 0 ? { background: 'var(--danger-bg)' } : undefined}>
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                             <div className="product-thumb"><Package size={16} /></div>
@@ -199,9 +199,9 @@ export function Products() {
                                     </td>
                                     <td><span className="font-mono">{p.sku}</span></td>
                                     <td className="text-muted">{getCategoryName(p.categoryId)}</td>
-                                    <td style={{ textAlign: 'right' }}>{formatCurrency(p.price)}</td>
-                                    <td style={{ textAlign: 'right' }} className="text-muted">{formatCurrency(p.costPrice)}</td>
-                                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{p.quantity} {p.unit}</td>
+                                    <td style={{ textAlign: 'right' }} className="tabular-nums">{formatCurrency(p.price)}</td>
+                                    <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">{formatCurrency(p.costPrice)}</td>
+                                    <td style={{ textAlign: 'right', fontWeight: 600 }} className="tabular-nums">{p.quantity} {p.unit}</td>
                                     <td>{getStockBadge(p)}</td>
                                     <td>
                                         <div className="table-actions">

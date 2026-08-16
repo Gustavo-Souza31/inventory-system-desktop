@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "open-props/style";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ===== RESET ===== */
 *,
@@ -17,43 +18,47 @@ body,
     overflow: hidden;
 }
 
-/* ===== CSS VARIABLES (DARK THEME) ===== */
+/* ===== CSS VARIABLES (LIGHT THEME) ===== */
 :root {
-    /* Background */
-    --bg-primary: #0f1117;
-    --bg-secondary: #161923;
-    --bg-card: #1c1f2e;
-    --bg-card-hover: #242838;
-    --bg-input: #1c1f2e;
-    --bg-sidebar: #111320;
-    --bg-modal-overlay: rgba(0, 0, 0, 0.6);
+    color-scheme: light;
 
-    /* Accent */
-    --accent: #6c5ce7;
-    --accent-hover: #7c6ff0;
-    --accent-light: rgba(108, 92, 231, 0.15);
-    --accent-glow: rgba(108, 92, 231, 0.3);
+    /* Background */
+    --bg-primary: #faf8f5;
+    --bg-secondary: #f3efe8;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f7f3ec;
+    --bg-input: #ffffff;
+    --bg-sidebar: #f3efe8;
+    --bg-modal-overlay: rgba(33, 28, 21, 0.45);
+
+    /* Accent — laranja queimado (Open Props orange-10), escurecido pra
+       manter contraste AA como texto/ícone sobre fundo claro */
+    --accent: #bf400d;
+    --accent-hover: #a3370a;
+    --accent-light: rgba(191, 64, 13, 0.1);
+    --accent-glow: rgba(191, 64, 13, 0.18);
 
     /* Text */
-    --text-primary: #e8eaf0;
-    --text-secondary: #8b8fa3;
-    --text-muted: #555970;
+    --text-primary: #211c15;
+    --text-secondary: #6b6357;
+    --text-muted: #a49c8c;
     --text-on-accent: #ffffff;
 
     /* Border */
-    --border: #2a2d3e;
-    --border-hover: #3a3d52;
-    --border-focus: #6c5ce7;
+    --border: #e6e0d5;
+    --border-hover: #d8d0c0;
+    --border-focus: #bf400d;
 
-    /* Status colors */
-    --success: #00c9a7;
-    --success-bg: rgba(0, 201, 167, 0.12);
-    --warning: #ffc53d;
-    --warning-bg: rgba(255, 197, 61, 0.12);
-    --danger: #ff6b6b;
-    --danger-bg: rgba(255, 107, 107, 0.12);
-    --info: #4ea8de;
-    --info-bg: rgba(78, 168, 222, 0.12);
+    /* Status colors — escurecidos em relação à proposta escura pra manter
+       contraste de texto/ícone sobre fundo claro */
+    --success: #099268;
+    --success-bg: rgba(9, 146, 104, 0.1);
+    --warning: #a16207;
+    --warning-bg: rgba(161, 98, 7, 0.1);
+    --danger: #e03131;
+    --danger-bg: rgba(224, 49, 49, 0.1);
+    --info: #1971c2;
+    --info-bg: rgba(25, 113, 194, 0.1);
 
     /* Layout */
     --sidebar-width: 260px;
@@ -62,11 +67,12 @@ body,
     --border-radius-sm: 6px;
     --border-radius-lg: 14px;
 
-    /* Shadows */
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.4);
-    --shadow-glow: 0 0 20px rgba(108, 92, 231, 0.2);
+    /* Shadows — bem mais sutis que no escuro, fundo claro não precisa de
+       tanto peso pra comunicar elevação */
+    --shadow-sm: 0 1px 2px rgba(33, 28, 21, 0.06);
+    --shadow-md: 0 3px 5px -2px rgba(33, 28, 21, 0.05), 0 7px 14px -5px rgba(33, 28, 21, 0.09);
+    --shadow-lg: 0 -1px 3px rgba(33, 28, 21, 0.04), 0 12px 28px -8px rgba(33, 28, 21, 0.16);
+    --shadow-glow: 0 4px 12px rgba(191, 64, 13, 0.18);
 
     /* Typography */
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -137,7 +143,7 @@ body,
 .sidebar-logo-icon {
     width: 38px;
     height: 38px;
-    background: linear-gradient(135deg, var(--accent), #a78bfa);
+    background: var(--accent);
     border-radius: var(--border-radius);
     display: flex;
     align-items: center;
@@ -503,13 +509,13 @@ body,
 .stat-card:hover {
     border-color: var(--border-hover);
     transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-glow);
 }
 
 .stat-card-icon {
     width: 44px;
     height: 44px;
-    border-radius: var(--border-radius);
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -558,6 +564,7 @@ body,
     font-weight: 700;
     color: var(--text-primary);
     line-height: 1.2;
+    font-variant-numeric: tabular-nums;
 }
 
 /* ===== BADGES ===== */
@@ -896,8 +903,13 @@ body,
 }
 
 .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'JetBrains Mono', var(--font-monospace-code);
     font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+    font-variant-numeric: tabular-nums;
 }
 
 .truncate {

@@ -178,7 +178,7 @@ export function Sales() {
                             <div style={{
                                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
                                 background: 'var(--bg-card)', border: '1px solid var(--border)',
-                                borderRadius: 'var(--border-radius)', boxShadow: '0 8px 32px rgba(0,0,0,.4)',
+                                borderRadius: 'var(--border-radius)', boxShadow: 'var(--shadow-lg)',
                                 maxHeight: '320px', overflow: 'auto',
                             }}>
                                 {filtered.map((p) => (
@@ -226,32 +226,32 @@ export function Sales() {
                     {/* Quick info cards */}
                     <div className="stats-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
                         <div className="stat-card">
-                            <div className="stat-icon" style={{ background: 'var(--accent-bg)' }}>
-                                <ShoppingCart size={18} style={{ color: 'var(--accent)' }} />
+                            <div className="stat-card-icon purple">
+                                <ShoppingCart size={18} />
                             </div>
-                            <div className="stat-info">
-                                <span className="stat-label">Itens no Carrinho</span>
-                                <span className="stat-value">{cart.reduce((s, i) => s + i.quantity, 0)}</span>
+                            <div className="stat-card-info">
+                                <div className="stat-card-label">Itens no Carrinho</div>
+                                <div className="stat-card-value tabular-nums">{cart.reduce((s, i) => s + i.quantity, 0)}</div>
                             </div>
                         </div>
                         <div className="stat-card">
-                            <div className="stat-icon" style={{ background: 'var(--success-bg)' }}>
-                                <DollarSign size={18} style={{ color: 'var(--success)' }} />
+                            <div className="stat-card-icon green">
+                                <DollarSign size={18} />
                             </div>
-                            <div className="stat-info">
-                                <span className="stat-label">Desconto Total</span>
-                                <span className="stat-value" style={{ color: totalDiscount > 0 ? 'var(--success)' : undefined }}>
+                            <div className="stat-card-info">
+                                <div className="stat-card-label">Desconto Total</div>
+                                <div className="stat-card-value tabular-nums" style={{ color: totalDiscount > 0 ? 'var(--success)' : undefined }}>
                                     {totalDiscount > 0 ? `- ${fmt(totalDiscount)}` : fmt(0)}
-                                </span>
+                                </div>
                             </div>
                         </div>
                         <div className="stat-card">
-                            <div className="stat-icon" style={{ background: 'var(--warning-bg)' }}>
-                                <Package size={18} style={{ color: 'var(--warning)' }} />
+                            <div className="stat-card-icon yellow">
+                                <Package size={18} />
                             </div>
-                            <div className="stat-info">
-                                <span className="stat-label">Produtos Cadastrados</span>
-                                <span className="stat-value">{products.length}</span>
+                            <div className="stat-card-info">
+                                <div className="stat-card-label">Produtos Cadastrados</div>
+                                <div className="stat-card-value tabular-nums">{products.length}</div>
                             </div>
                         </div>
                     </div>
@@ -286,11 +286,11 @@ export function Sales() {
                                     <div style={{ display: 'flex', gap: '6px', marginTop: '4px', fontSize: '10.5px' }}>
                                         <span style={{
                                             padding: '2px 6px', borderRadius: '4px',
-                                            background: 'rgba(74,222,128,0.1)', color: 'var(--success)',
+                                            background: 'var(--success-bg)', color: 'var(--success)',
                                         }}>-10%: {fmt(p.price * 0.9)}</span>
                                         <span style={{
                                             padding: '2px 6px', borderRadius: '4px',
-                                            background: 'rgba(251,191,36,0.1)', color: 'var(--warning)',
+                                            background: 'var(--warning-bg)', color: 'var(--warning)',
                                         }}>-20%: {fmt(p.price * 0.8)}</span>
                                     </div>
                                 </button>
@@ -384,7 +384,7 @@ export function Sales() {
                                                 </button>
                                                 <span style={{ fontSize: '11px' }} className="text-muted">/ {item.product.quantity} disp.</span>
                                             </div>
-                                            <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--accent)' }}>{fmt(getItemTotal(item))}</span>
+                                            <span className="tabular-nums" style={{ fontWeight: 700, fontSize: '14px', color: 'var(--accent)' }}>{fmt(getItemTotal(item))}</span>
                                         </div>
                                     </div>
                                 );
@@ -409,7 +409,7 @@ export function Sales() {
                             )}
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', fontSize: '20px', fontWeight: 800 }}>
                                 <span>Total:</span>
-                                <span style={{ color: 'var(--accent)' }}>{fmt(cartTotal)}</span>
+                                <span className="tabular-nums" style={{ color: 'var(--accent)' }}>{fmt(cartTotal)}</span>
                             </div>
 
                             {/* Payment method */}
@@ -444,7 +444,7 @@ export function Sales() {
                                     {paidNum > 0 && (
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '13px' }}>
                                             <span>Troco:</span>
-                                            <span style={{ fontWeight: 700, color: change >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                            <span className="tabular-nums" style={{ fontWeight: 700, color: change >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                                                 {fmt(Math.max(0, change))}
                                             </span>
                                         </div>

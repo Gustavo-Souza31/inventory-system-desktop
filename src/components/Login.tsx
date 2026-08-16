@@ -41,7 +41,7 @@ export function Login({ onSuccess }: Props) {
 
     if (confirmEmailSent) {
         return (
-            <div style={{
+            <div key="confirm-email-screen" style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 height: '100vh', background: 'var(--bg-primary)', padding: '20px',
             }}>
@@ -65,14 +65,14 @@ export function Login({ onSuccess }: Props) {
     }
 
     return (
-        <div style={{
+        <div key="auth-form-screen" style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             height: '100vh', background: 'var(--bg-primary)', padding: '20px',
         }}>
             <div className="card" style={{ maxWidth: '380px', width: '100%', padding: '32px' }}>
                 <div style={{ textAlign: 'center', marginBottom: '24px' }}>
                     <div style={{
-                        width: '56px', height: '56px', borderRadius: '50%', background: 'var(--accent-bg)',
+                        width: '56px', height: '56px', borderRadius: '50%', background: 'var(--accent-light)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px',
                     }}>
                         <Boxes size={28} style={{ color: 'var(--accent)' }} />
@@ -92,6 +92,8 @@ export function Login({ onSuccess }: Props) {
                             required type="email" className="form-input"
                             value={email} onChange={(e) => setEmail(e.target.value)}
                             placeholder="voce@exemplo.com" autoFocus
+                            data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"
+                            data-lpignore="true" data-1p-ignore
                         />
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
@@ -101,6 +103,7 @@ export function Login({ onSuccess }: Props) {
                             value={password} onChange={(e) => setPassword(e.target.value)}
                             placeholder={mode === 'register' ? 'Pelo menos 6 caracteres' : '••••••••'}
                             minLength={mode === 'register' ? 6 : undefined}
+                            data-lpignore="true" data-1p-ignore
                         />
                     </div>
 

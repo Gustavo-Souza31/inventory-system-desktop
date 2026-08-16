@@ -78,14 +78,17 @@ export function Dashboard() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 {/* Low Stock Alerts */}
-                <div className="card">
+                <div
+                    className="card"
+                    style={lowStockItems.length > 0 ? { borderLeft: '3px solid var(--warning)' } : undefined}
+                >
                     <div className="section-title">
                         <TrendingDown size={16} />
                         Alertas de Estoque Baixo
                     </div>
                     {lowStockItems.length === 0 ? (
                         <p className="text-muted" style={{ fontSize: '13px', padding: '12px 0' }}>
-                            Nenhum produto com estoque baixo 🎉
+                            Nenhum produto com estoque baixo
                         </p>
                     ) : (
                         <div className="table-container" style={{ border: 'none' }}>
@@ -100,7 +103,10 @@ export function Dashboard() {
                                 </thead>
                                 <tbody>
                                     {lowStockItems.map((p) => (
-                                        <tr key={p.id}>
+                                        <tr
+                                            key={p.id}
+                                            style={p.quantity === 0 ? { background: 'var(--danger-bg)' } : undefined}
+                                        >
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     {p.quantity === 0 ? (
@@ -112,10 +118,10 @@ export function Dashboard() {
                                                 </div>
                                             </td>
                                             <td className="text-muted">{getCategoryName(p.categoryId)}</td>
-                                            <td style={{ textAlign: 'right' }} className={p.quantity === 0 ? 'text-danger' : 'text-warning'}>
+                                            <td style={{ textAlign: 'right' }} className={`tabular-nums ${p.quantity === 0 ? 'text-danger' : 'text-warning'}`}>
                                                 {p.quantity}
                                             </td>
-                                            <td style={{ textAlign: 'right' }} className="text-muted">{p.minStock}</td>
+                                            <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">{p.minStock}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -151,7 +157,7 @@ export function Dashboard() {
                                         <div style={{ fontSize: '11.5px' }} className="text-muted">{m.reason}</div>
                                     </div>
                                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                        <div style={{ fontSize: '13px', fontWeight: 600 }} className={m.type === 'entrada' ? 'text-success' : 'text-danger'}>
+                                        <div style={{ fontSize: '13px', fontWeight: 600 }} className={`tabular-nums ${m.type === 'entrada' ? 'text-success' : 'text-danger'}`}>
                                             {m.type === 'entrada' ? '+' : '-'}{m.quantity}
                                         </div>
                                         <div style={{ fontSize: '11px' }} className="text-muted">{formatDate(m.date)}</div>
