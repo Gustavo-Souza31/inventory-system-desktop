@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard,
@@ -15,7 +15,8 @@ import {
     X,
     LogOut,
 } from 'lucide-react';
-import { getEmail, logout } from '../database/auth';
+import { logout } from '../database/auth';
+import { supabase } from '../database/supabaseClient';
 
 const navItems = [
     { label: 'Painel', path: '/', icon: LayoutDashboard },
@@ -45,6 +46,11 @@ export function Layout() {
     const location = useLocation();
     const title = pageTitles[location.pathname] || 'Inventário';
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [email, setEmail] = useState<string | null>(null);
+
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    }, []);
 
     return (
         <div className="app-layout">
@@ -90,15 +96,12 @@ export function Layout() {
                 </nav>
                 <div style={{ padding: '12px 10px', borderTop: '1px solid var(--border)' }}>
                     <div style={{ fontSize: '11px', padding: '0 8px 8px' }} className="text-muted truncate">
-                        {getEmail()}
+                        {email}
                     </div>
                     <button
                         className="sidebar-link"
                         style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer' }}
-                        onClick={() => {
-                            logout();
-                            window.location.reload();
-                        }}
+                        onClick={() => { logout(); }}
                     >
                         <LogOut />
                         Sair

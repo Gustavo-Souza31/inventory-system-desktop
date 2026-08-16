@@ -1,70 +1,51 @@
-import { getApiUrl, getToken, logout } from './auth';
+import { supabase } from './supabaseClient';
 
-// Camada HTTP: cada uma das 6 funções abaixo chama a rota REST equivalente
-// no servidor (server/src/api.ts). Sem SQL sendo montado aqui — quem monta
-// o SQL agora é o servidor, com a whitelist de tabelas dele.
-async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
-    const token = getToken();
-    const headers: Record<string, string> = {
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-
-    const res = await fetch(`${getApiUrl()}${path}`, { ...options, headers });
-
-    if (res.status === 401) {
-        // Sessão expirada ou token inválido: desloga e avisa o App.tsx
-        // pra voltar pra tela de login.
-        logout();
-        window.dispatchEvent(new Event('auth:unauthorized'));
-        throw new Error('Sessão expirada. Faça login novamente.');
-    }
-
-    if (res.status === 404) return null;
-
-    const data = res.status === 204 ? null : await res.json();
-    if (!res.ok) {
-        throw new Error(data?.error || `Erro ${res.status}`);
-    }
-    return data;
-}
+// Camada de acesso a dados: cada função abaixo chama o Supabase direto do
+// renderer via supabase-js (HTTPS), sem passar mais por IPC do Electron nem
+// por um backend próprio. Isolamento por usuário é garantido no banco via
+// Row Level Security (RLS) — não precisa filtrar por usuário aqui.
 
 export async function getAll<T>(table: string): Promise<T[]> {
-    return await apiFetch(`/api/${table}`);
+    const { data, error } = await supabase.from(table).select('*');
+    if (error) throw new Error(error.message);
+    return (data ?? []) as T[];
 }
 
 export async function getById<T>(table: string, id: number): Promise<T | undefined> {
-    const row = await apiFetch(`/api/${table}/${id}`);
-    return row ?? undefined;
+    const { data, error } = await supabase.from(table).select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return (data ?? undefined) as T | undefined;
 }
 
 export async function findWhere<T>(table: string, query: Record<string, any>): Promise<T[]> {
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(query)) {
-        params.set(k, String(v));
+    let builder = supabase.from(table).select('*');
+    for (const [key, value] of Object.entries(query)) {
+        builder = builder.eq(key, value);
     }
-    return await apiFetch(`/api/${table}?${params.toString()}`);
+    const { data, error } = await builder;
+    if (error) throw new Error(error.message);
+    return (data ?? []) as T[];
 }
 
 export async function insert(table: string, item: Record<string, any>): Promise<number> {
-    const res = await apiFetch(`/api/${table}`, {
-        method: 'POST',
-        body: JSON.stringify(item),
-    });
-    return res.id;
+    const { data, error } = await supabase.from(table).insert(item).select('id').single();
+    if (error) throw new Error(error.message);
+    return data.id;
 }
 
 export async function updateById(table: string, id: number, changes: Record<string, any>): Promise<void> {
-    await apiFetch(`/api/${table}/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(changes),
-    });
+    const { error } = await supabase.from(table).update(changes).eq('id', id);
+    if (error) throw new Error(error.message);
 }
 
 export async function deleteById(table: string, id: number): Promise<void> {
-    await apiFetch(`/api/${table}/${id}`, { method: 'DELETE' });
+    const { error } = await supabase.from(table).delete().eq('id', id);
+    if (error) throw new Error(error.message);
 }
 
 export async function clearTable(table: string): Promise<void> {
-    await apiFetch(`/api/${table}`, { method: 'DELETE' });
+    // O PostgREST exige algum filtro num DELETE; ".neq('id', 0)" combinado
+    // com RLS apaga só as linhas do usuário logado (ids sempre são > 0).
+    const { error } = await supabase.from(table).delete().neq('id', 0);
+    if (error) throw new Error(error.message);
 }

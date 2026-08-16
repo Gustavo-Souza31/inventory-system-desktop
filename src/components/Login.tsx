@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { LogIn, UserPlus, AlertCircle, Boxes } from 'lucide-react';
+import { LogIn, UserPlus, AlertCircle, Boxes, MailCheck } from 'lucide-react';
 import { login, register } from '../database/auth';
-import { seedDatabase } from '../database/seed';
 
 interface Props {
     onSuccess: () => void;
@@ -13,6 +12,7 @@ export function Login({ onSuccess }: Props) {
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [confirmEmailSent, setConfirmEmailSent] = useState(false);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -21,18 +21,47 @@ export function Login({ onSuccess }: Props) {
         try {
             if (mode === 'login') {
                 await login(email, password);
+                onSuccess();
             } else {
-                await register(email, password);
-                // Conta nova: popula com dados de exemplo, igual o app
-                // já fazia localmente antes de existir login.
-                await seedDatabase();
+                const { needsEmailConfirmation } = await register(email, password);
+                if (needsEmailConfirmation) {
+                    // Projeto Supabase exige confirmação por e-mail: ainda não há
+                    // sessão ativa, então não liberamos o app agora.
+                    setConfirmEmailSent(true);
+                } else {
+                    onSuccess();
+                }
             }
-            onSuccess();
         } catch (err: any) {
             setError(err.message || 'Erro ao autenticar.');
         } finally {
             setLoading(false);
         }
+    }
+
+    if (confirmEmailSent) {
+        return (
+            <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                height: '100vh', background: 'var(--bg-primary)', padding: '20px',
+            }}>
+                <div className="card" style={{ maxWidth: '380px', width: '100%', padding: '32px', textAlign: 'center' }}>
+                    <MailCheck size={32} style={{ color: 'var(--accent)', marginBottom: '12px' }} />
+                    <h2 style={{ fontSize: '17px', fontWeight: 700, marginBottom: '8px' }}>Confirme seu e-mail</h2>
+                    <p className="text-muted" style={{ fontSize: '13px', marginBottom: '20px' }}>
+                        Enviamos um link de confirmação para <strong>{email}</strong>. Depois de confirmar, volte aqui e entre normalmente.
+                    </p>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ width: '100%' }}
+                        onClick={() => { setConfirmEmailSent(false); setMode('login'); }}
+                    >
+                        Voltar para o login
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     return (

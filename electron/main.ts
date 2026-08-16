@@ -14,9 +14,7 @@ function buildMenu() {
     {
       label: "Sair",
       click: () => {
-        mainWindow?.webContents.executeJavaScript(
-          "localStorage.removeItem('authToken'); localStorage.removeItem('authEmail'); location.reload();"
-        );
+        mainWindow?.webContents.executeJavaScript("window.__appLogout && window.__appLogout();");
       },
     },
   ];

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import type { Session } from '@supabase/supabase-js';
 import { Layout } from './components/Layout';
 import { Login } from './components/Login';
-import { isAuthenticated } from './database/auth';
+import { getSession, onAuthStateChange } from './database/auth';
 import { Dashboard } from './pages/Dashboard';
 import { Products } from './pages/Products';
 import { Categories } from './pages/Categories';
@@ -14,18 +15,23 @@ import { Locations } from './pages/Locations';
 import { Sales } from './pages/Sales';
 
 function App() {
-  const [authed, setAuthed] = useState(isAuthenticated());
+  const [session, setSession] = useState<Session | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
-    function handleUnauthorized() {
-      setAuthed(false);
-    }
-    window.addEventListener('auth:unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    getSession().then((s) => {
+      setSession(s);
+      setCheckingSession(false);
+    });
+    return onAuthStateChange(setSession);
   }, []);
 
-  if (!authed) {
-    return <Login onSuccess={() => setAuthed(true)} />;
+  if (checkingSession) {
+    return null;
+  }
+
+  if (!session) {
+    return <Login onSuccess={() => { /* onAuthStateChange já atualiza a sessão */ }} />;
   }
 
   return (

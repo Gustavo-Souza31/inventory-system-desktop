@@ -1,48 +1,44 @@
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:3001';
+import { supabase } from './supabaseClient';
+import type { Session } from '@supabase/supabase-js';
 
-const TOKEN_KEY = 'authToken';
-const EMAIL_KEY = 'authEmail';
-
-export function getApiUrl(): string {
-    return API_URL;
+export async function getSession(): Promise<Session | null> {
+    const { data } = await supabase.auth.getSession();
+    return data.session;
 }
 
-export function getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
-}
-
-export function getEmail(): string | null {
-    return localStorage.getItem(EMAIL_KEY);
-}
-
-export function isAuthenticated(): boolean {
-    return !!getToken();
-}
-
-export function logout(): void {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(EMAIL_KEY);
-}
-
-async function authRequest(path: string, email: string, password: string): Promise<{ email: string }> {
-    const res = await fetch(`${API_URL}${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+export function onAuthStateChange(callback: (session: Session | null) => void) {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        callback(session);
     });
-    const data = await res.json();
-    if (!res.ok) {
-        throw new Error(data.error || 'Erro ao autenticar.');
-    }
-    localStorage.setItem(TOKEN_KEY, data.token);
-    localStorage.setItem(EMAIL_KEY, data.email);
-    return { email: data.email };
+    return () => data.subscription.unsubscribe();
 }
 
-export function login(email: string, password: string): Promise<{ email: string }> {
-    return authRequest('/auth/login', email, password);
+export async function login(email: string, password: string): Promise<{ email: string }> {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(traduzErro(error.message));
+    return { email: data.user?.email ?? email };
 }
 
-export function register(email: string, password: string): Promise<{ email: string }> {
-    return authRequest('/auth/register', email, password);
+/**
+ * Retorna `needsEmailConfirmation: true` quando o projeto Supabase exige
+ * confirmação por e-mail antes de liberar a sessão (comportamento padrão).
+ */
+export async function register(
+    email: string,
+    password: string
+): Promise<{ email: string; needsEmailConfirmation: boolean }> {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw new Error(traduzErro(error.message));
+    return { email, needsEmailConfirmation: !data.session };
+}
+
+export async function logout(): Promise<void> {
+    await supabase.auth.signOut();
+}
+
+function traduzErro(message: string): string {
+    if (message.includes('Invalid login credentials')) return 'E-mail ou senha incorretos.';
+    if (message.includes('User already registered')) return 'Já existe uma conta com esse e-mail.';
+    if (message.includes('Password should be at least')) return 'A senha deve ter pelo menos 6 caracteres.';
+    return message;
 }
