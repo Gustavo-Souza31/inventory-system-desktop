@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.inventorysystem.mobile',
-  appName: 'Inventory System',
+  appId: 'com.empacota.mobile',
+  appName: 'Empacota',
   webDir: 'dist'
 };
 

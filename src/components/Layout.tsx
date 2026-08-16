@@ -72,7 +72,7 @@ export function Layout() {
                             <BoxesIcon size={20} />
                         </div>
                         <div className="sidebar-logo-text">
-                            <h1>Inventário</h1>
+                            <h1>Empacota</h1>
                             <span>Sistema de Gestão</span>
                         </div>
                     </div>

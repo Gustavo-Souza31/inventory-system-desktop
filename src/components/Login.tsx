@@ -77,6 +77,9 @@ export function Login({ onSuccess }: Props) {
                     }}>
                         <Boxes size={28} style={{ color: 'var(--accent)' }} />
                     </div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '0.02em', color: 'var(--accent)', marginBottom: '10px' }}>
+                        Empacota
+                    </div>
                     <h2 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '4px' }}>
                         {mode === 'login' ? 'Entrar' : 'Criar conta'}
                     </h2>

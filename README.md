@@ -1,4 +1,4 @@
-# Inventory System Desktop
+# Empacota
 
 Sistema de gestão de inventário e ponto de venda (PDV) multiusuário, construído com **Electron**, **React**, **TypeScript** e **Supabase** (autenticação + banco de dados Postgres na nuvem).
 
