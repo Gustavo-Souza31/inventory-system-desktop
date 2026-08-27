@@ -1,0 +1,32 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Roda a cada 5 dias às 03:00 UTC (evita o pause de 7 dias por inatividade)
+    - cron: '0 3 */5 * *'
+  workflow_dispatch: # permite rodar manualmente pelo GitHub também, pra testar
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase project
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # Faz uma requisição simples via REST API do Supabase na tabela "products".
+          # limit=1 garante que a consulta seja rápida e barata.
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/products?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+
+          echo "Resposta do Supabase: HTTP $response"
+
+          if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
+            echo "✅ Supabase respondeu normalmente, projeto continua ativo."
+          else
+            echo "⚠️ Supabase retornou um status inesperado: $response"
+            exit 1
+          fi
