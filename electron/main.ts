@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow, Menu, session } from "electron";
 import path from "path";
 
 let mainWindow: BrowserWindow | null = null;
@@ -28,7 +28,20 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      webSecurity: false,
     },
+  });
+
+  // Allow fetch() to external URLs (Supabase) from file:// context
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Access-Control-Allow-Origin": ["*"],
+        "Access-Control-Allow-Headers": ["*"],
+        "Access-Control-Allow-Methods": ["GET,POST,PUT,DELETE,PATCH,OPTIONS"],
+      },
+    });
   });
 
   if (process.env.VITE_DEV_SERVER_URL) {
