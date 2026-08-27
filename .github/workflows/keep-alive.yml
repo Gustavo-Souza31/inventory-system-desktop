@@ -15,10 +15,10 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          # Faz uma requisição simples via REST API do Supabase na tabela "produtos".
+          # Faz uma requisição simples via REST API do Supabase na tabela "products".
           # limit=1 garante que a consulta seja rápida e barata.
           response=$(curl -s -o /dev/null -w "%{http_code}" \
-            "${SUPABASE_URL}/rest/v1/produtos?select=id&limit=1" \
+            "${SUPABASE_URL}/rest/v1/products?select=id&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
 
