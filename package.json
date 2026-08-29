@@ -64,6 +64,13 @@
       "signAndEditExecutable": false,
       "icon": "build/icon.ico"
     },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Empacota"
+    },
     "publish": {
       "provider": "github",
       "owner": "Gustavo-Souza31",
