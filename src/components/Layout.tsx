@@ -14,9 +14,12 @@ import {
     Menu,
     X,
     LogOut,
+    Bell,
 } from 'lucide-react';
 import { logout } from '../database/auth';
 import { supabase } from '../database/supabaseClient';
+import { getLowStockAlerts, type LowStockAlert } from '../utils/lowStock';
+import { LowStockModal } from './LowStockModal';
 
 const navItems = [
     { label: 'Painel', path: '/', icon: LayoutDashboard },
@@ -47,9 +50,21 @@ export function Layout() {
     const title = pageTitles[location.pathname] || 'Inventário';
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [email, setEmail] = useState<string | null>(null);
+    const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
+    const [showLowStock, setShowLowStock] = useState(false);
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    }, []);
+
+    // Layout monta uma vez por sessão válida (login novo ou restaurada ao
+    // reabrir o app) — é o ponto natural para checar estoque baixo "ao entrar
+    // no sistema", sem distinguir os dois casos.
+    useEffect(() => {
+        getLowStockAlerts().then((alerts) => {
+            setLowStockAlerts(alerts);
+            if (alerts.length > 0) setShowLowStock(true);
+        });
     }, []);
 
     return (
@@ -95,6 +110,22 @@ export function Layout() {
                     ))}
                 </nav>
                 <div style={{ padding: '12px 10px', borderTop: '1px solid var(--border)' }}>
+                    <button
+                        className="sidebar-link"
+                        style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', justifyContent: 'space-between' }}
+                        onClick={() => setShowLowStock(true)}
+                        title="Produtos com estoque baixo"
+                    >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Bell />
+                            Estoque baixo
+                        </span>
+                        {lowStockAlerts.length > 0 && (
+                            <span className="badge badge-warning">{lowStockAlerts.length}</span>
+                        )}
+                    </button>
+                </div>
+                <div style={{ padding: '12px 10px', borderTop: '1px solid var(--border)' }}>
                     <div style={{ fontSize: '11px', padding: '0 8px 8px' }} className="text-muted truncate">
                         {email}
                     </div>
@@ -116,6 +147,10 @@ export function Layout() {
                     <Outlet />
                 </div>
             </div>
+
+            {showLowStock && (
+                <LowStockModal alerts={lowStockAlerts} onClose={() => setShowLowStock(false)} />
+            )}
         </div>
     );
 }

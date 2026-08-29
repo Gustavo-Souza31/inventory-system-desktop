@@ -630,6 +630,10 @@ body,
     animation: slideUp 250ms ease;
 }
 
+.modal-wide {
+    max-width: 860px;
+}
+
 .modal-header {
     padding: 20px 24px 16px;
     display: flex;

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Package, Download, Barcode, History } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, Pencil, Trash2, Package, Download, Barcode, History, Upload, FileSpreadsheet, CheckCircle, AlertCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getAll, insert, updateById } from '../database/sql-wrapper';
@@ -11,6 +11,9 @@ import { SearchBar } from '../components/SearchBar';
 import { EmptyState } from '../components/EmptyState';
 import { BarcodeLabel } from '../components/BarcodeLabel';
 import { PriceHistoryModal } from '../components/PriceHistoryModal';
+import { ImportPreviewModal } from '../components/ImportPreviewModal';
+import { parseImportFile, markDuplicates, downloadImportTemplate, commitImport, type ImportRow } from '../utils/import';
+import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 
 type ProductForm = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -36,6 +39,12 @@ export function Products() {
     const [priceHistoryProduct, setPriceHistoryProduct] = useState<Product | null>(null);
     const [formErrors, setFormErrors] = useState<string[]>([]);
     const [formWarning, setFormWarning] = useState<string | null>(null);
+    const [importRows, setImportRows] = useState<ImportRow[] | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [importMsg, setImportMsg] = useState<{ success: boolean; message: string } | null>(null);
+    const importInputRef = useRef<HTMLInputElement>(null);
+    const [focusQuantityOnOpen, setFocusQuantityOnOpen] = useState(false);
+    const quantityInputRef = useRef<HTMLInputElement>(null);
 
     const {
         items: products, modalOpen, setModalOpen, editing: editingProduct, form, setForm,
@@ -56,13 +65,14 @@ export function Products() {
         // productId (electron/database.ts), o banco já cuida disso.
     });
 
-    useEffect(() => {
-        Promise.all([getAll<Category>('categories'), getAll<Supplier>('suppliers')])
-            .then(([cats, sups]) => {
-                setCategories(cats);
-                setSuppliers(sups);
-            });
-    }, []);
+    async function loadCategoriesAndSuppliers() {
+        const [cats, sups] = await Promise.all([getAll<Category>('categories'), getAll<Supplier>('suppliers')]);
+        setCategories(cats);
+        setSuppliers(sups);
+        return { cats, sups };
+    }
+
+    useEffect(() => { loadCategoriesAndSuppliers(); }, []);
 
     const filtered = products.filter((p) => {
         const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -83,6 +93,32 @@ export function Products() {
         setFormErrors([]);
         setFormWarning(null);
     }
+
+    function handleBarcodeScan(code: string) {
+        const match = products.find((p) => p.sku.toLowerCase() === code.toLowerCase());
+        if (match) {
+            openEdit(match);
+            setFocusQuantityOnOpen(true);
+        } else {
+            openNew();
+            setForm((f) => ({ ...f, sku: code }));
+        }
+    }
+
+    useBarcodeScanner({
+        enabled: !modalOpen && !deleteTarget && !barcodeProduct && !priceHistoryProduct && !importRows,
+        onScan: handleBarcodeScan,
+    });
+
+    useEffect(() => {
+        if (!modalOpen || !focusQuantityOnOpen) return;
+        const frame = requestAnimationFrame(() => {
+            quantityInputRef.current?.focus();
+            quantityInputRef.current?.select();
+        });
+        setFocusQuantityOnOpen(false);
+        return () => cancelAnimationFrame(frame);
+    }, [modalOpen, focusQuantityOnOpen]);
 
     async function handleSave() {
         const errors = validateProduct(form);
@@ -138,6 +174,49 @@ export function Products() {
         doc.save(`produtos_${new Date().toISOString().slice(0, 10)}.pdf`);
     }
 
+    async function handleImportFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+
+        setImportMsg(null);
+        const { rows, missingColumns } = await parseImportFile(file);
+        if (missingColumns.length > 0) {
+            setImportMsg({ success: false, message: `Arquivo inválido: colunas obrigatórias não encontradas (${missingColumns.join(', ')}).` });
+            return;
+        }
+        if (rows.length === 0) {
+            setImportMsg({ success: false, message: 'O arquivo não tem nenhuma linha de dados.' });
+            return;
+        }
+        setImportRows(markDuplicates(rows, products));
+    }
+
+    async function handleConfirmImport(overwriteDuplicates: boolean) {
+        if (!importRows) return;
+        setImporting(true);
+        try {
+            const summary = await commitImport(importRows, overwriteDuplicates, categories, suppliers, products);
+            const parts = [`${summary.insertedCount} importado(s)`];
+            if (summary.updatedCount > 0) parts.push(`${summary.updatedCount} atualizado(s)`);
+            if (summary.skippedCount > 0) parts.push(`${summary.skippedCount} ignorado(s)`);
+            let message = parts.join(', ') + '.';
+            if (summary.skippedDetails.length > 0) {
+                const preview = summary.skippedDetails.slice(0, 3).join(' | ');
+                const extra = summary.skippedDetails.length > 3 ? ` (e mais ${summary.skippedDetails.length - 3})` : '';
+                message += ` Motivos: ${preview}${extra}`;
+            }
+            setImportMsg({ success: summary.insertedCount + summary.updatedCount > 0, message });
+            setImportRows(null);
+            if (summary.createdCategories.length > 0 || summary.createdSuppliers.length > 0) {
+                await loadCategoriesAndSuppliers();
+            }
+            await loadData();
+        } finally {
+            setImporting(false);
+        }
+    }
+
     function getStockBadge(p: Product) {
         if (p.quantity === 0) return <span className="badge badge-danger">Sem estoque</span>;
         if (p.quantity <= p.minStock) return <span className="badge badge-warning">Estoque baixo</span>;
@@ -164,9 +243,24 @@ export function Products() {
                 </div>
                 <div className="toolbar-right">
                     <button className="btn btn-secondary" onClick={handleExportPdf} title="Exportar PDF"><Download size={16} /> PDF</button>
+                    <button className="btn btn-secondary" onClick={downloadImportTemplate} title="Baixar modelo de importação"><FileSpreadsheet size={16} /> Modelo</button>
+                    <button className="btn btn-secondary" onClick={() => importInputRef.current?.click()} title="Importar produtos de CSV/Excel"><Upload size={16} /> Importar</button>
+                    <input ref={importInputRef} type="file" accept=".csv,.xlsx,.xls" style={{ display: 'none' }} onChange={handleImportFileSelected} />
                     <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Produto</button>
                 </div>
             </div>
+
+            {importMsg && (
+                <div style={{
+                    marginBottom: '16px', padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    background: importMsg.success ? 'var(--success-bg)' : 'var(--danger-bg)',
+                    color: importMsg.success ? 'var(--success)' : 'var(--danger)',
+                }}>
+                    {importMsg.success ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                    {importMsg.message}
+                </div>
+            )}
 
             {filtered.length === 0 ? (
                 <EmptyState icon={Package} title="Nenhum produto encontrado" description={search ? 'Tente outra busca.' : 'Adicione seu primeiro produto para começar.'} action={!search ? <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Produto</button> : undefined} />
@@ -266,7 +360,7 @@ export function Products() {
                     <div className="form-row">
                         <div className="form-group">
                             <label className="form-label">Quantidade em estoque</label>
-                            <input className="form-input" type="number" min="0" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })} />
+                            <input ref={quantityInputRef} className="form-input" type="number" min="0" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: Number(e.target.value) })} />
                         </div>
                         <div className="form-group">
                             <label className="form-label">Estoque mínimo</label>
@@ -307,6 +401,15 @@ export function Products() {
 
             {priceHistoryProduct && (
                 <PriceHistoryModal productId={priceHistoryProduct.id!} productName={priceHistoryProduct.name} onClose={() => setPriceHistoryProduct(null)} />
+            )}
+
+            {importRows && (
+                <ImportPreviewModal
+                    rows={importRows}
+                    importing={importing}
+                    onCancel={() => setImportRows(null)}
+                    onConfirm={handleConfirmImport}
+                />
             )}
         </>
     );

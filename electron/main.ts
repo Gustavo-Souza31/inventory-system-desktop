@@ -1,7 +1,37 @@
-import { app, BrowserWindow, Menu, session } from "electron";
+import { app, BrowserWindow, Menu, session, dialog } from "electron";
 import path from "path";
+import { autoUpdater } from "electron-updater";
 
 let mainWindow: BrowserWindow | null = null;
+
+function setupAutoUpdater() {
+  // Sem build assinado (`npm run electron:dev`), não há release publicado
+  // pra checar — checar update fora do app empacotado só gera erro de rede.
+  if (!app.isPackaged) return;
+
+  autoUpdater.autoDownload = true;
+
+  autoUpdater.on("update-downloaded", () => {
+    dialog
+      .showMessageBox(mainWindow!, {
+        type: "info",
+        title: "Atualização disponível",
+        message: "Nova atualização baixada, reinicie o app para aplicar.",
+        buttons: ["Reiniciar agora", "Depois"],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) autoUpdater.quitAndInstall();
+      });
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("Falha ao verificar/baixar atualização:", err);
+  });
+
+  autoUpdater.checkForUpdates();
+}
 
 function buildMenu() {
   const isMac = process.platform === "darwin";
@@ -58,6 +88,7 @@ function createWindow() {
 app.whenReady().then(() => {
   Menu.setApplicationMenu(buildMenu());
   createWindow();
+  setupAutoUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
