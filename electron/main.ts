@@ -90,20 +90,38 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  Menu.setApplicationMenu(buildMenu());
-  createWindow();
-  setupAutoUpdater();
+// Clique duplo rápido no .exe (ou abrir de novo com o app já rodando)
+// disparava uma segunda instância com sua própria janela empilhada
+// exatamente em cima da primeira, na mesma posição — parecia que nada
+// tinha acontecido ou que a janela "sumia".
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
     }
   });
-});
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
+  app.whenReady().then(() => {
+    Menu.setApplicationMenu(buildMenu());
+    createWindow();
+    setupAutoUpdater();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+}
