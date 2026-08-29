@@ -55,12 +55,17 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
+    title: `Empacota_${app.getVersion()}`,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: false,
     },
   });
+
+  // O <title>Empacota</title> do index.html sobrescreveria o título acima
+  // assim que a página carrega, se não bloquearmos esse comportamento padrão.
+  mainWindow.on("page-title-updated", (event) => event.preventDefault());
 
   // Allow fetch() to external URLs (Supabase) from file:// context
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
