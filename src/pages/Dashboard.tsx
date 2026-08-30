@@ -49,7 +49,7 @@ export function Dashboard() {
         setMovements(recent);
     }
 
-    function getCategoryName(categoryId: number) {
+    function getCategoryName(categoryId: number | null) {
         return categories.find((c) => c.id === categoryId)?.name || '-';
     }
 

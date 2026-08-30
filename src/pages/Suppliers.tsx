@@ -14,12 +14,13 @@ export function Suppliers() {
     const [search, setSearch] = useState('');
     const {
         items: suppliers, modalOpen, setModalOpen, editing, form, setForm,
-        deleteTarget, setDeleteTarget, openNew, openEdit, handleSave, handleDelete,
+        deleteTarget, setDeleteTarget, fieldErrors, saveError, openNew, openEdit, handleSave, handleDelete,
     } = useCrud<Supplier, SupplierForm>({
         table: 'suppliers',
         emptyForm,
         toForm: (s) => ({ name: s.name, email: s.email, phone: s.phone, address: s.address, notes: s.notes }),
         toRecord: (form, isNew) => (isNew ? { ...form, createdAt: new Date() } : { ...form }),
+        validate: (form) => (!form.name.trim() ? { name: 'Nome é obrigatório.' } : null),
         // Não precisa zerar supplierId nos produtos manualmente: a FK
         // products.supplierId tem ON DELETE SET NULL (electron/database.ts),
         // o banco já faz isso sozinho ao excluir o fornecedor.
@@ -79,11 +80,12 @@ export function Suppliers() {
                 <Modal
                     title={editing ? 'Editar Fornecedor' : 'Novo Fornecedor'}
                     onClose={() => setModalOpen(false)}
-                    footer={<><button className="btn btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button><button className="btn btn-primary" onClick={handleSave} disabled={!form.name}>Salvar</button></>}
+                    footer={<><button className="btn btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button><button className="btn btn-primary" onClick={handleSave}>Salvar</button></>}
                 >
                     <div className="form-group">
                         <label className="form-label">Nome *</label>
                         <input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nome do fornecedor" />
+                        {fieldErrors.name && <p style={{ color: 'var(--danger)', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.name}</p>}
                     </div>
                     <div className="form-row">
                         <div className="form-group">
@@ -103,6 +105,14 @@ export function Suppliers() {
                         <label className="form-label">Observações</label>
                         <textarea className="form-textarea" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Observações sobre o fornecedor" />
                     </div>
+                    {saveError && (
+                        <div style={{
+                            background: 'var(--danger-bg)', color: 'var(--danger)',
+                            padding: '10px 12px', borderRadius: '8px', fontSize: '13px', marginTop: '8px',
+                        }}>
+                            ⚠️ {saveError}
+                        </div>
+                    )}
                 </Modal>
             )}
 

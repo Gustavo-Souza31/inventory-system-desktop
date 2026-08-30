@@ -126,7 +126,7 @@ export function Reports() {
         return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
 
-    function getCategoryName(id: number) {
+    function getCategoryName(id: number | null) {
         return categories.find((c) => c.id === id)?.name || '-';
     }
 

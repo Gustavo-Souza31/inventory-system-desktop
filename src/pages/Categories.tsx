@@ -14,12 +14,13 @@ type CategoryForm = { name: string; description: string; color: string };
 export function Categories() {
     const {
         items: categories, modalOpen, setModalOpen, editing, form, setForm,
-        deleteTarget, setDeleteTarget, openNew: openNewBase, openEdit, handleSave, handleDelete,
+        deleteTarget, setDeleteTarget, fieldErrors, saveError, openNew: openNewBase, openEdit, handleSave, handleDelete,
     } = useCrud<EnrichedCategory, CategoryForm>({
         table: 'categories',
         emptyForm: { name: '', description: '', color: COLORS[0] },
         toForm: (c) => ({ name: c.name, description: c.description, color: c.color }),
         toRecord: (form, isNew) => (isNew ? { ...form, createdAt: new Date() } : { ...form }),
+        validate: (form) => (!form.name.trim() ? { name: 'Nome é obrigatório.' } : null),
         transform: async (cats) => {
             return Promise.all(
                 cats.map(async (c) => {
@@ -77,11 +78,12 @@ export function Categories() {
                 <Modal
                     title={editing ? 'Editar Categoria' : 'Nova Categoria'}
                     onClose={() => setModalOpen(false)}
-                    footer={<><button className="btn btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button><button className="btn btn-primary" onClick={handleSave} disabled={!form.name}>Salvar</button></>}
+                    footer={<><button className="btn btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button><button className="btn btn-primary" onClick={handleSave}>Salvar</button></>}
                 >
                     <div className="form-group">
                         <label className="form-label">Nome *</label>
                         <input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nome da categoria" />
+                        {fieldErrors.name && <p style={{ color: 'var(--danger)', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.name}</p>}
                     </div>
                     <div className="form-group">
                         <label className="form-label">Descrição</label>
@@ -95,6 +97,14 @@ export function Categories() {
                             ))}
                         </div>
                     </div>
+                    {saveError && (
+                        <div style={{
+                            background: 'var(--danger-bg)', color: 'var(--danger)',
+                            padding: '10px 12px', borderRadius: '8px', fontSize: '13px', marginTop: '8px',
+                        }}>
+                            ⚠️ {saveError}
+                        </div>
+                    )}
                 </Modal>
             )}
 

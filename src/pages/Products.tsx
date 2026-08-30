@@ -4,6 +4,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getAll, insert, updateById } from '../database/sql-wrapper';
 import { useCrud } from '../hooks/useCrud';
+import { translateDbError } from '../utils/dbErrors';
+import { getNextProductSku } from '../utils/sku';
 import type { Product, Category, Supplier } from '../database/types';
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -18,7 +20,7 @@ import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 type ProductForm = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>;
 
 const emptyProduct: ProductForm = {
-    name: '', sku: '', description: '', categoryId: 0, supplierId: null,
+    name: '', sku: '', description: '', categoryId: null, supplierId: null,
     price: 0, costPrice: 0, quantity: 0, minStock: 10, unit: 'un',
 };
 
@@ -39,6 +41,8 @@ export function Products() {
     const [priceHistoryProduct, setPriceHistoryProduct] = useState<Product | null>(null);
     const [formErrors, setFormErrors] = useState<string[]>([]);
     const [formWarning, setFormWarning] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    const [saveError, setSaveError] = useState<string | null>(null);
     const [importRows, setImportRows] = useState<ImportRow[] | null>(null);
     const [importing, setImporting] = useState(false);
     const [importMsg, setImportMsg] = useState<{ success: boolean; message: string } | null>(null);
@@ -83,15 +87,23 @@ export function Products() {
 
     function openNew() {
         openNewBase();
-        setForm((f) => ({ ...f, categoryId: categories[0]?.id || 0 }));
+        setForm((f) => ({
+            ...f,
+            categoryId: categories[0]?.id ?? null,
+            sku: getNextProductSku(products.map((p) => p.sku)),
+        }));
         setFormErrors([]);
         setFormWarning(null);
+        setFieldErrors({});
+        setSaveError(null);
     }
 
     function openEdit(p: Product) {
         openEditBase(p);
         setFormErrors([]);
         setFormWarning(null);
+        setFieldErrors({});
+        setSaveError(null);
     }
 
     function handleBarcodeScan(code: string) {
@@ -121,10 +133,20 @@ export function Products() {
     }, [modalOpen, focusQuantityOnOpen]);
 
     async function handleSave() {
+        const nextFieldErrors: Record<string, string> = {};
+        if (!form.name.trim()) nextFieldErrors.name = 'Nome é obrigatório.';
+        if (!form.sku.trim()) nextFieldErrors.sku = 'SKU é obrigatório.';
+        else if (products.some((p) => p.sku.toLowerCase() === form.sku.trim().toLowerCase() && p.id !== editingProduct?.id)) {
+            nextFieldErrors.sku = 'Já existe um produto com esse SKU.';
+        }
+        setFieldErrors(nextFieldErrors);
+        if (Object.keys(nextFieldErrors).length > 0) return;
+
         const errors = validateProduct(form);
         setFormErrors(errors);
         if (errors.length > 0) return;
 
+        setSaveError(null);
         setFormWarning(
             form.costPrice > form.price
                 ? 'Atenção: o preço de custo é maior que o preço de venda. O produto será salvo mesmo assim.'
@@ -132,24 +154,28 @@ export function Products() {
         );
 
         const now = new Date();
-        if (editingProduct?.id) {
-            // Track price changes
-            if (editingProduct.price !== form.price || editingProduct.costPrice !== form.costPrice) {
-                await insert('priceHistory', {
-                    productId: editingProduct.id,
-                    oldPrice: editingProduct.price,
-                    newPrice: form.price,
-                    oldCostPrice: editingProduct.costPrice,
-                    newCostPrice: form.costPrice,
-                    changedAt: now,
-                });
+        try {
+            if (editingProduct?.id) {
+                // Track price changes
+                if (editingProduct.price !== form.price || editingProduct.costPrice !== form.costPrice) {
+                    await insert('priceHistory', {
+                        productId: editingProduct.id,
+                        oldPrice: editingProduct.price,
+                        newPrice: form.price,
+                        oldCostPrice: editingProduct.costPrice,
+                        newCostPrice: form.costPrice,
+                        changedAt: now,
+                    });
+                }
+                await updateById('products', editingProduct.id, { ...form, updatedAt: now });
+            } else {
+                await insert('products', { ...form, createdAt: now, updatedAt: now });
             }
-            await updateById('products', editingProduct.id, { ...form, updatedAt: now });
-        } else {
-            await insert('products', { ...form, createdAt: now, updatedAt: now });
+            setModalOpen(false);
+            await loadData();
+        } catch (err) {
+            setSaveError(err instanceof Error ? translateDbError(err.message) : 'Erro ao salvar produto.');
         }
-        setModalOpen(false);
-        await loadData();
     }
 
     function handleExportPdf() {
@@ -223,7 +249,7 @@ export function Products() {
         return <span className="badge badge-success">Em estoque</span>;
     }
 
-    function getCategoryName(id: number) {
+    function getCategoryName(id: number | null) {
         return categories.find((c) => c.id === id)?.name || '-';
     }
 
@@ -316,16 +342,22 @@ export function Products() {
                 <Modal
                     title={editingProduct ? 'Editar Produto' : 'Novo Produto'}
                     onClose={() => setModalOpen(false)}
-                    footer={<><button className="btn btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button><button className="btn btn-primary" onClick={handleSave} disabled={!form.name || !form.sku}>Salvar</button></>}
+                    footer={<><button className="btn btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button><button className="btn btn-primary" onClick={handleSave}>Salvar</button></>}
                 >
                     <div className="form-row">
                         <div className="form-group">
                             <label className="form-label">Nome *</label>
                             <input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nome do produto" />
+                            {fieldErrors.name && <p style={{ color: 'var(--danger)', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.name}</p>}
                         </div>
                         <div className="form-group">
                             <label className="form-label">SKU *</label>
                             <input className="form-input" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="Ex: PRD-001" />
+                            {fieldErrors.sku ? (
+                                <p style={{ color: 'var(--danger)', fontSize: '12px', marginTop: '4px' }}>{fieldErrors.sku}</p>
+                            ) : !editingProduct && (
+                                <p className="text-muted" style={{ fontSize: '11.5px', marginTop: '4px' }}>Gerado automaticamente — edite se quiser usar outro código.</p>
+                            )}
                         </div>
                     </div>
                     <div className="form-group">
@@ -335,7 +367,8 @@ export function Products() {
                     <div className="form-row">
                         <div className="form-group">
                             <label className="form-label">Categoria</label>
-                            <select className="form-select" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: Number(e.target.value) })}>
+                            <select className="form-select" value={form.categoryId ?? ''} onChange={(e) => setForm({ ...form, categoryId: e.target.value ? Number(e.target.value) : null })}>
+                                <option value="">Nenhuma</option>
                                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </div>
@@ -387,6 +420,14 @@ export function Products() {
                     )}
                     {formWarning && (
                         <p style={{ color: 'var(--warning)', fontSize: '13px', marginTop: '8px' }}>⚠️ {formWarning}</p>
+                    )}
+                    {saveError && (
+                        <div style={{
+                            background: 'var(--danger-bg)', color: 'var(--danger)',
+                            padding: '10px 12px', borderRadius: '8px', fontSize: '13px', marginTop: '8px',
+                        }}>
+                            ⚠️ {saveError}
+                        </div>
                     )}
                 </Modal>
             )}

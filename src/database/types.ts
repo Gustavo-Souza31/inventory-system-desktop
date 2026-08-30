@@ -21,7 +21,7 @@ export interface Product {
     name: string;
     sku: string;
     description: string;
-    categoryId: number;
+    categoryId: number | null;
     supplierId: number | null;
     price: number;
     costPrice: number;

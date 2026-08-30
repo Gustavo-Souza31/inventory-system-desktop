@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getAll, insert, updateById, deleteById } from '../database/sql-wrapper';
+import { translateDbError } from '../utils/dbErrors';
 
 interface UseCrudOptions<T extends { id?: number }, Form> {
     table: string;
@@ -13,6 +14,9 @@ interface UseCrudOptions<T extends { id?: number }, Form> {
     transform?: (items: T[]) => Promise<T[]> | T[];
     // Roda antes de excluir; retornar uma string bloqueia a exclusão e mostra o erro
     beforeDelete?: (item: T) => Promise<string | null> | string | null;
+    // Roda antes de salvar; retornar { campo: mensagem } bloqueia o salvamento
+    // e mostra a mensagem perto do campo correspondente.
+    validate?: (form: Form) => Record<string, string> | null;
 }
 
 export function useCrud<T extends { id?: number }, Form>(options: UseCrudOptions<T, Form>) {
@@ -21,6 +25,8 @@ export function useCrud<T extends { id?: number }, Form>(options: UseCrudOptions
     const [editing, setEditing] = useState<T | null>(null);
     const [form, setForm] = useState<Form>(options.emptyForm);
     const [deleteTarget, setDeleteTarget] = useState<T | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     const loadData = useCallback(async () => {
         const rows = await getAll<T>(options.table);
@@ -33,25 +39,43 @@ export function useCrud<T extends { id?: number }, Form>(options: UseCrudOptions
     function openNew() {
         setEditing(null);
         setForm(options.emptyForm);
+        setFieldErrors({});
+        setSaveError(null);
         setModalOpen(true);
     }
 
     function openEdit(item: T) {
         setEditing(item);
         setForm(options.toForm(item));
+        setFieldErrors({});
+        setSaveError(null);
         setModalOpen(true);
     }
 
     async function handleSave() {
+        if (options.validate) {
+            const errors = options.validate(form);
+            if (errors && Object.keys(errors).length > 0) {
+                setFieldErrors(errors);
+                return;
+            }
+        }
+        setFieldErrors({});
+        setSaveError(null);
+
         const isNew = !editing?.id;
         const record = options.toRecord ? options.toRecord(form, isNew) : form;
-        if (editing?.id) {
-            await updateById(options.table, editing.id, record as Record<string, any>);
-        } else {
-            await insert(options.table, record as Record<string, any>);
+        try {
+            if (editing?.id) {
+                await updateById(options.table, editing.id, record as Record<string, any>);
+            } else {
+                await insert(options.table, record as Record<string, any>);
+            }
+            setModalOpen(false);
+            await loadData();
+        } catch (err) {
+            setSaveError(err instanceof Error ? translateDbError(err.message) : 'Erro ao salvar.');
         }
-        setModalOpen(false);
-        await loadData();
     }
 
     async function handleDelete() {
@@ -75,6 +99,7 @@ export function useCrud<T extends { id?: number }, Form>(options: UseCrudOptions
         modalOpen, setModalOpen,
         editing, form, setForm,
         deleteTarget, setDeleteTarget,
+        fieldErrors, saveError,
         openNew, openEdit, handleSave, handleDelete,
     };
 }
