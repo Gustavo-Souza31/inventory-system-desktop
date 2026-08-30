@@ -151,6 +151,44 @@ CREATE POLICY "productStock_owner" ON "productStock"
     FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- ----------------------------------------------------------------------------
+-- profiles (dados de cadastro do usuário: nome completo e telefone)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "profiles" (
+    "user_id" UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    "fullName" VARCHAR(255) NOT NULL,
+    "phone" VARCHAR(30) NOT NULL,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE "profiles" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "profiles_owner" ON "profiles";
+CREATE POLICY "profiles_owner" ON "profiles"
+    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- Preenche "profiles" automaticamente quando um usuário é criado. Necessário
+-- porque, com confirmação por e-mail habilitada, signUp() não retorna uma
+-- sessão autenticada (auth.uid() seria nulo), então o client não consegue
+-- inserir direto em "profiles" por causa do RLS acima. nome/telefone chegam
+-- via options.data do signUp() e ficam em auth.users.raw_user_meta_data.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles ("user_id", "fullName", "phone")
+    VALUES (
+        NEW.id,
+        NEW.raw_user_meta_data->>'full_name',
+        NEW.raw_user_meta_data->>'phone'
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS "on_auth_user_created" ON auth.users;
+CREATE TRIGGER "on_auth_user_created"
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ----------------------------------------------------------------------------
 -- settings (uma linha por usuário)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "settings" (

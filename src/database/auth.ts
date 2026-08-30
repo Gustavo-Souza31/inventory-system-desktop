@@ -22,12 +22,25 @@ export async function login(email: string, password: string): Promise<{ email: s
 /**
  * Retorna `needsEmailConfirmation: true` quando o projeto Supabase exige
  * confirmação por e-mail antes de liberar a sessão (comportamento padrão).
+ *
+ * nome/telefone vão em options.data: como a sessão ainda não existe até a
+ * confirmação, é isso que alimenta o trigger que cria a linha em "profiles"
+ * (ver supabase/schema.sql).
  */
 export async function register(
     email: string,
-    password: string
+    password: string,
+    fullName: string,
+    phone: string
 ): Promise<{ email: string; needsEmailConfirmation: boolean }> {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+            data: { full_name: fullName, phone },
+            emailRedirectTo: 'https://gustavo-souza31.github.io/inventory-system-desktop/',
+        },
+    });
     if (error) throw new Error(traduzErro(error.message));
     return { email, needsEmailConfirmation: !data.session };
 }

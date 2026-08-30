@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LogIn, UserPlus, AlertCircle, Boxes, MailCheck } from 'lucide-react';
 import { login, register } from '../database/auth';
+import { formatPhoneBR } from '../utils/phone';
 
 interface Props {
     onSuccess: () => void;
@@ -10,6 +11,8 @@ export function Login({ onSuccess }: Props) {
     const [mode, setMode] = useState<'login' | 'register'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [fullName, setFullName] = useState('');
+    const [phone, setPhone] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [confirmEmailSent, setConfirmEmailSent] = useState(false);
@@ -23,7 +26,7 @@ export function Login({ onSuccess }: Props) {
                 await login(email, password);
                 onSuccess();
             } else {
-                const { needsEmailConfirmation } = await register(email, password);
+                const { needsEmailConfirmation } = await register(email, password, fullName, phone);
                 if (needsEmailConfirmation) {
                     // Projeto Supabase exige confirmação por e-mail: ainda não há
                     // sessão ativa, então não liberamos o app agora.
@@ -89,12 +92,35 @@ export function Login({ onSuccess }: Props) {
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {mode === 'register' && (
+                        <>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label className="form-label">Nome completo</label>
+                                <input
+                                    required type="text" className="form-input"
+                                    value={fullName} onChange={(e) => setFullName(e.target.value)}
+                                    placeholder="Seu nome completo" autoFocus
+                                    data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"
+                                    data-lpignore="true" data-1p-ignore
+                                />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label className="form-label">Telefone</label>
+                                <input
+                                    required type="tel" className="form-input"
+                                    value={phone} onChange={(e) => setPhone(formatPhoneBR(e.target.value))}
+                                    placeholder="(11) 91234-5678" maxLength={15}
+                                    data-lpignore="true" data-1p-ignore
+                                />
+                            </div>
+                        </>
+                    )}
                     <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">E-mail</label>
                         <input
                             required type="email" className="form-input"
                             value={email} onChange={(e) => setEmail(e.target.value)}
-                            placeholder="voce@exemplo.com" autoFocus
+                            placeholder="voce@exemplo.com" autoFocus={mode === 'login'}
                             data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"
                             data-lpignore="true" data-1p-ignore
                         />
