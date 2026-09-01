@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
     ShoppingCart, Search, Plus, Minus, Trash2, CheckCircle, X, Printer, DollarSign, Package,
 } from 'lucide-react';
-import { getAll, findWhere, insert, updateById } from '../database/sql-wrapper';
+import { getAll, getById, findWhere, insert, updateById } from '../database/sql-wrapper';
 import type { Product, Location, ProductStock } from '../database/types';
 
 interface CartItem {
@@ -25,6 +25,8 @@ export function Sales() {
     const [lastSaleTotal, setLastSaleTotal] = useState(0);
     const [paymentMethod, setPaymentMethod] = useState<string>('Dinheiro');
     const [amountPaid, setAmountPaid] = useState('');
+    const [saleError, setSaleError] = useState<string | null>(null);
+    const [finalizing, setFinalizing] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -96,53 +98,105 @@ export function Sales() {
     async function finalizeSale() {
         if (cart.length === 0) return;
 
-        const saleId = Date.now();
-        const now = new Date();
+        setSaleError(null);
+        setFinalizing(true);
+        try {
+            // Fase 1 — validação prévia: soma a quantidade pedida por produto
+            // (o carrinho pode ter duas linhas do mesmo produto com descontos
+            // diferentes) e compara com a quantidade atual e fresca de cada
+            // um (não o snapshot que ficou salvo no carrinho, que pode estar
+            // desatualizado). Nada é gravado se qualquer produto não tiver
+            // estoque suficiente para o total pedido.
+            const requestedByProduct = new Map<number, number>();
+            for (const item of cart) {
+                const id = item.product.id!;
+                requestedByProduct.set(id, (requestedByProduct.get(id) || 0) + item.quantity);
+            }
 
-        for (const item of cart) {
-            // Create a movement (saida) for each item
-            await insert('movements', {
-                productId: item.product.id!,
-                type: 'saida',
-                quantity: item.quantity,
-                reason: `Venda #${saleId}`,
-                notes: `Pagamento: ${paymentMethod}${item.discount > 0 ? ` | Desconto: ${item.discount}%` : ''}`,
-                locationId: selectedLocation,
-                date: now,
-                createdAt: now,
-            });
+            const freshProducts = await Promise.all(
+                [...requestedByProduct.keys()].map((id) => getById<Product>('products', id))
+            );
+            const freshById = new Map<number, Product>();
+            for (const p of freshProducts) {
+                if (p) freshById.set(p.id!, p);
+            }
 
-            // Update product quantity
-            await updateById('products', item.product.id!, {
-                quantity: Math.max(0, item.product.quantity - item.quantity),
-                updatedAt: now,
-            });
-
-            // Update location stock if applicable
-            if (selectedLocation) {
-                const [stock] = await findWhere<ProductStock>('productStock', {
-                    productId: item.product.id!,
-                    locationId: selectedLocation,
-                });
-                if (stock) {
-                    await updateById('productStock', stock.id!, {
-                        quantity: Math.max(0, stock.quantity - item.quantity),
-                    });
+            for (const [productId, requested] of requestedByProduct) {
+                const fresh = freshById.get(productId);
+                if (!fresh) {
+                    setSaleError('Um dos produtos do carrinho não foi encontrado. Atualize a página e tente novamente.');
+                    return;
+                }
+                if (requested > fresh.quantity) {
+                    setSaleError(
+                        `Estoque insuficiente para "${fresh.name}". Disponível: ${fresh.quantity} ${fresh.unit}, solicitado: ${requested} ${fresh.unit}.`
+                    );
+                    return;
                 }
             }
-        }
 
-        setLastSaleTotal(cartTotal);
-        setShowSuccess(true);
-        setCart([]);
-        setAmountPaid('');
-        setSearch('');
-        await loadData();
+            // Fase 2 — commit: só chega aqui se todos os produtos passaram
+            // na validação acima.
+            const saleId = Date.now();
+            const now = new Date();
+
+            for (const item of cart) {
+                // Create a movement (saida) for each item
+                await insert('movements', {
+                    productId: item.product.id!,
+                    type: 'saida',
+                    quantity: item.quantity,
+                    reason: `Venda #${saleId}`,
+                    notes: `Pagamento: ${paymentMethod}${item.discount > 0 ? ` | Desconto: ${item.discount}%` : ''}`,
+                    locationId: selectedLocation,
+                    date: now,
+                    createdAt: now,
+                });
+
+                // Update product quantity — usa o valor fresco (com os
+                // decrementos já aplicados por linhas anteriores do mesmo
+                // produto), não o snapshot antigo do carrinho.
+                const currentFresh = freshById.get(item.product.id!)!;
+                const updatedQty = currentFresh.quantity - item.quantity;
+                freshById.set(item.product.id!, { ...currentFresh, quantity: updatedQty });
+                await updateById('products', item.product.id!, {
+                    quantity: updatedQty,
+                    updatedAt: now,
+                });
+
+                // Update location stock if applicable
+                if (selectedLocation) {
+                    const [stock] = await findWhere<ProductStock>('productStock', {
+                        productId: item.product.id!,
+                        locationId: selectedLocation,
+                    });
+                    if (stock) {
+                        await updateById('productStock', stock.id!, {
+                            quantity: Math.max(0, stock.quantity - item.quantity),
+                        });
+                    }
+                }
+            }
+
+            setLastSaleTotal(cartTotal);
+            setShowSuccess(true);
+            setCart([]);
+            setAmountPaid('');
+            setSearch('');
+            await loadData();
+        } catch (err) {
+            console.error('Erro ao finalizar venda:', err);
+            const base = err instanceof Error ? err.message : 'Erro desconhecido ao finalizar a venda.';
+            setSaleError(`${base} A venda pode ter sido parcialmente registrada — confira o histórico de movimentações antes de tentar novamente.`);
+        } finally {
+            setFinalizing(false);
+        }
     }
 
     function handleNewSale() {
         setShowSuccess(false);
         setPaymentMethod('Dinheiro');
+        setSaleError(null);
         searchRef.current?.focus();
     }
 
@@ -452,13 +506,19 @@ export function Sales() {
                                 </div>
                             )}
 
+                            {saleError && (
+                                <p style={{ color: 'var(--danger)', fontSize: '13px', marginBottom: '10px' }}>
+                                    ⚠️ {saleError}
+                                </p>
+                            )}
+
                             <button
                                 className="btn btn-primary"
                                 onClick={finalizeSale}
-                                disabled={cart.length === 0 || (paymentMethod === 'Dinheiro' && paidNum > 0 && paidNum < cartTotal)}
+                                disabled={finalizing || cart.length === 0 || (paymentMethod === 'Dinheiro' && paidNum > 0 && paidNum < cartTotal)}
                                 style={{ width: '100%', padding: '12px', fontSize: '15px', fontWeight: 700 }}
                             >
-                                <CheckCircle size={18} /> Finalizar Venda
+                                <CheckCircle size={18} /> {finalizing ? 'Finalizando...' : 'Finalizar Venda'}
                             </button>
                         </div>
                     )}

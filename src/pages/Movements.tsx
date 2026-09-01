@@ -16,6 +16,7 @@ export function Movements() {
     const [filterType, setFilterType] = useState<'' | 'entrada' | 'saida'>('');
     const [modalOpen, setModalOpen] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
         productId: 0,
         type: 'entrada' as 'entrada' | 'saida',
@@ -63,8 +64,25 @@ export function Movements() {
 
     async function handleSave() {
         setSaveError(null);
+        setSaving(true);
         const now = new Date();
         try {
+            // Busca o produto na hora do save (não confia no estado carregado
+            // quando a tela abriu) — é contra esse valor que validamos saída
+            // e calculamos a nova quantidade.
+            const product = await getById<Product>('products', form.productId);
+            if (!product) {
+                setSaveError('Produto não encontrado. Atualize a página e tente novamente.');
+                return;
+            }
+
+            if (form.type === 'saida' && form.quantity > product.quantity) {
+                setSaveError(
+                    `Estoque insuficiente para "${product.name}". Disponível: ${product.quantity} ${product.unit}, solicitado: ${form.quantity} ${product.unit}.`
+                );
+                return;
+            }
+
             await insert('movements', {
                 productId: form.productId,
                 type: form.type,
@@ -76,16 +94,18 @@ export function Movements() {
                 createdAt: now,
             });
 
-            // Update product quantity
-            const product = await getById<Product>('products', form.productId);
-            if (product) {
-                const newQty = form.type === 'entrada'
-                    ? product.quantity + form.quantity
-                    : Math.max(0, product.quantity - form.quantity);
-                await updateById('products', product.id!, { quantity: newQty, updatedAt: now });
-            }
+            // Update product quantity (a validação acima garante que, numa
+            // saída, form.quantity <= product.quantity — não pode ficar negativo)
+            const newQty = form.type === 'entrada'
+                ? product.quantity + form.quantity
+                : product.quantity - form.quantity;
+            await updateById('products', product.id!, { quantity: newQty, updatedAt: now });
 
-            // Update location stock if location is specified
+            // Update location stock if location is specified. O estoque por
+            // local não é validado contra form.quantity (ver discussão na
+            // revisão): productStock não é uma partição confiável do total
+            // do produto, então o Math.max aqui continua como piso de
+            // segurança para não gravar negativo, sem bloquear o salvamento.
             if (form.locationId) {
                 const [existing] = await findWhere<ProductStock>('productStock', {
                     productId: form.productId,
@@ -93,10 +113,10 @@ export function Movements() {
                 });
 
                 if (existing) {
-                    const newQty = form.type === 'entrada'
+                    const newLocationQty = form.type === 'entrada'
                         ? existing.quantity + form.quantity
                         : Math.max(0, existing.quantity - form.quantity);
-                    await updateById('productStock', existing.id!, { quantity: newQty });
+                    await updateById('productStock', existing.id!, { quantity: newLocationQty });
                 } else if (form.type === 'entrada') {
                     await insert('productStock', {
                         productId: form.productId,
@@ -111,6 +131,8 @@ export function Movements() {
         } catch (err) {
             console.error('Erro ao registrar movimentação:', err);
             setSaveError(err instanceof Error ? err.message : 'Erro desconhecido ao salvar.');
+        } finally {
+            setSaving(false);
         }
     }
 
@@ -214,7 +236,7 @@ export function Movements() {
                 <Modal
                     title="Nova Movimentação"
                     onClose={() => setModalOpen(false)}
-                    footer={<><button className="btn btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button><button className="btn btn-primary" onClick={handleSave} disabled={!form.productId || form.quantity <= 0}>Registrar</button></>}
+                    footer={<><button className="btn btn-secondary" onClick={() => setModalOpen(false)} disabled={saving}>Cancelar</button><button className="btn btn-primary" onClick={handleSave} disabled={!form.productId || form.quantity <= 0 || saving}>{saving ? 'Registrando...' : 'Registrar'}</button></>}
                 >
                     <div className="form-group">
                         <label className="form-label">Produto *</label>
