@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { LogIn, UserPlus, AlertCircle, Boxes, MailCheck } from 'lucide-react';
-import { login, register } from '../database/auth';
+import { LogIn, UserPlus, AlertCircle, Boxes, MailCheck, KeyRound } from 'lucide-react';
+import { login, register, resetPassword } from '../database/auth';
 import { formatPhoneBR } from '../utils/phone';
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function Login({ onSuccess }: Props) {
-    const [mode, setMode] = useState<'login' | 'register'>('login');
+    const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
@@ -16,6 +16,7 @@ export function Login({ onSuccess }: Props) {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [confirmEmailSent, setConfirmEmailSent] = useState(false);
+    const [resetEmailSent, setResetEmailSent] = useState(false);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -42,6 +43,23 @@ export function Login({ onSuccess }: Props) {
         }
     }
 
+    async function handleForgotSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        setError(null);
+        setLoading(true);
+        try {
+            // resetPassword() só lança erro em falhas reais (rede, e-mail
+            // malformado, etc.) — o Supabase nunca indica se o e-mail existe
+            // ou não, então sempre chegamos no "sucesso" nesse caso.
+            await resetPassword(email);
+            setResetEmailSent(true);
+        } catch (err: any) {
+            setError(err.message || 'Erro ao solicitar recuperação de senha.');
+        } finally {
+            setLoading(false);
+        }
+    }
+
     if (confirmEmailSent) {
         return (
             <div key="confirm-email-screen" style={{
@@ -59,6 +77,91 @@ export function Login({ onSuccess }: Props) {
                         className="btn btn-primary"
                         style={{ width: '100%' }}
                         onClick={() => { setConfirmEmailSent(false); setMode('login'); }}
+                    >
+                        Voltar para o login
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (resetEmailSent) {
+        return (
+            <div key="reset-email-screen" style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                height: '100vh', background: 'var(--bg-primary)', padding: '20px',
+            }}>
+                <div className="card" style={{ maxWidth: '380px', width: '100%', padding: '32px', textAlign: 'center' }}>
+                    <MailCheck size={32} style={{ color: 'var(--accent)', marginBottom: '12px' }} />
+                    <h2 style={{ fontSize: '17px', fontWeight: 700, marginBottom: '8px' }}>Verifique seu e-mail</h2>
+                    <p className="text-muted" style={{ fontSize: '13px', marginBottom: '20px' }}>
+                        Se existir uma conta com o e-mail informado, enviamos um link para redefinir a senha. Verifique sua caixa de entrada (e a pasta de spam).
+                    </p>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ width: '100%' }}
+                        onClick={() => { setResetEmailSent(false); setMode('login'); }}
+                    >
+                        Voltar para o login
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (mode === 'forgot') {
+        return (
+            <div key="forgot-password-screen" style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                height: '100vh', background: 'var(--bg-primary)', padding: '20px',
+            }}>
+                <div className="card" style={{ maxWidth: '380px', width: '100%', padding: '32px' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                        <div style={{
+                            width: '56px', height: '56px', borderRadius: '50%', background: 'var(--accent-light)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px',
+                        }}>
+                            <KeyRound size={28} style={{ color: 'var(--accent)' }} />
+                        </div>
+                        <h2 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '4px' }}>Esqueci minha senha</h2>
+                        <p className="text-muted" style={{ fontSize: '12.5px' }}>
+                            Digite seu e-mail e enviaremos um link para redefinir sua senha.
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleForgotSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label">E-mail</label>
+                            <input
+                                required type="email" className="form-input"
+                                value={email} onChange={(e) => setEmail(e.target.value)}
+                                placeholder="voce@exemplo.com" autoFocus
+                                data-lpignore="true" data-1p-ignore
+                            />
+                        </div>
+
+                        {error && (
+                            <div style={{
+                                background: 'var(--danger-bg)', color: 'var(--danger)',
+                                padding: '10px 12px', borderRadius: '8px', fontSize: '13px',
+                                display: 'flex', gap: '8px', alignItems: 'flex-start',
+                            }}>
+                                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+                                <span>{error}</span>
+                            </div>
+                        )}
+
+                        <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', padding: '11px', marginTop: '4px' }}>
+                            {loading ? 'Aguarde...' : 'Enviar link de recuperação'}
+                        </button>
+                    </form>
+
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => { setMode('login'); setError(null); }}
+                        style={{ width: '100%', marginTop: '14px' }}
                     >
                         Voltar para o login
                     </button>
@@ -134,6 +237,16 @@ export function Login({ onSuccess }: Props) {
                             minLength={mode === 'register' ? 6 : undefined}
                             data-lpignore="true" data-1p-ignore
                         />
+                        {mode === 'login' && (
+                            <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => { setMode('forgot'); setError(null); }}
+                                style={{ padding: '4px 0', marginTop: '6px', fontSize: '12.5px' }}
+                            >
+                                Esqueci minha senha
+                            </button>
+                        )}
                     </div>
 
                     {error && (

@@ -49,6 +49,25 @@ export async function logout(): Promise<void> {
     await supabase.auth.signOut();
 }
 
+/**
+ * O link de recuperação abre no navegador externo (mesma situação da
+ * confirmação de cadastro — ver comentário em supabaseClient.ts), então
+ * o redirectTo aponta pra uma página estática no GitHub Pages
+ * (docs/reset-password.html) que troca a senha diretamente ali, sem
+ * precisar do app Electron aberto.
+ *
+ * O Supabase sempre retorna sucesso aqui, exista ou não uma conta com
+ * esse e-mail — é assim que evita revelar quais e-mails têm cadastro
+ * (proteção contra enumeração de usuários já embutida na API, não é
+ * algo que precisamos mascarar no frontend).
+ */
+export async function resetPassword(email: string): Promise<void> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'https://gustavo-souza31.github.io/inventory-system-desktop/reset-password.html',
+    });
+    if (error) throw new Error(traduzErro(error.message));
+}
+
 function traduzErro(message: string): string {
     if (message.includes('Invalid login credentials')) return 'E-mail ou senha incorretos.';
     if (message.includes('User already registered')) return 'Já existe uma conta com esse e-mail.';
