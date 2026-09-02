@@ -3,12 +3,14 @@ import { Package, DollarSign, AlertTriangle, ArrowLeftRight, TrendingDown, Arrow
 import { getAll } from '../database/sql-wrapper';
 import type { Product, Movement, Category } from '../database/types';
 import { StatsCard } from '../components/StatsCard';
+import { isLowStock, getLowStockThreshold } from '../utils/lowStock';
 
 export function Dashboard() {
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [movements, setMovements] = useState<(Movement & { productName?: string })[]>([]);
     const [lowStockItems, setLowStockItems] = useState<Product[]>([]);
+    const [lowStockThreshold, setLowStockThreshold] = useState(10);
     const [totalValue, setTotalValue] = useState(0);
     const [monthMovements, setMonthMovements] = useState(0);
 
@@ -22,8 +24,11 @@ export function Dashboard() {
         setProducts(allProducts);
         setCategories(allCategories);
 
-        // Low stock items
-        const lowStock = allProducts.filter((p) => p.quantity <= p.minStock);
+        // Low stock items (minStock do produto, com o limite padrão das
+        // configurações como fallback quando o produto não tem o dele)
+        const threshold = await getLowStockThreshold();
+        setLowStockThreshold(threshold);
+        const lowStock = allProducts.filter((p) => isLowStock(p, threshold));
         setLowStockItems(lowStock);
 
         // Total inventory value
@@ -121,7 +126,7 @@ export function Dashboard() {
                                             <td style={{ textAlign: 'right' }} className={`tabular-nums ${p.quantity === 0 ? 'text-danger' : 'text-warning'}`}>
                                                 {p.quantity}
                                             </td>
-                                            <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">{p.minStock}</td>
+                                            <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">{p.minStock > 0 ? p.minStock : lowStockThreshold}</td>
                                         </tr>
                                     ))}
                                 </tbody>

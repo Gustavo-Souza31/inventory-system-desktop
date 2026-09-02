@@ -18,8 +18,10 @@ import {
 } from 'lucide-react';
 import { logout } from '../database/auth';
 import { supabase } from '../database/supabaseClient';
+import { getAll } from '../database/sql-wrapper';
 import { getLowStockAlerts, type LowStockAlert } from '../utils/lowStock';
 import { LowStockModal } from './LowStockModal';
+import type { Settings as SettingsType } from '../database/types';
 
 const navItems = [
     { label: 'Painel', path: '/', icon: LayoutDashboard },
@@ -50,11 +52,18 @@ export function Layout() {
     const title = pageTitles[location.pathname] || 'Inventário';
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [email, setEmail] = useState<string | null>(null);
+    const [companyName, setCompanyName] = useState<string | null>(null);
     const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
     const [showLowStock, setShowLowStock] = useState(false);
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    }, []);
+
+    useEffect(() => {
+        getAll<SettingsType>('settings').then(([s]) => {
+            if (s?.companyName) setCompanyName(s.companyName);
+        });
     }, []);
 
     // Layout monta uma vez por sessão válida (login novo ou restaurada ao
@@ -142,6 +151,7 @@ export function Layout() {
             <div className="main-content">
                 <header className="page-header">
                     <h2>{title}</h2>
+                    {companyName && <span className="page-header-company">{companyName}</span>}
                 </header>
                 <div className="page-body">
                     <Outlet />

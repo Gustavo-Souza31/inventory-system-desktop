@@ -257,6 +257,12 @@ body,
     color: var(--text-primary);
 }
 
+.page-header-company {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
 .page-header-actions {
     display: flex;
     align-items: center;

@@ -6,6 +6,7 @@ import { getAll, insert, updateById } from '../database/sql-wrapper';
 import { useCrud } from '../hooks/useCrud';
 import { translateDbError } from '../utils/dbErrors';
 import { getNextProductSku } from '../utils/sku';
+import { isLowStock, getLowStockThreshold } from '../utils/lowStock';
 import type { Product, Category, Supplier } from '../database/types';
 import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -35,6 +36,7 @@ function validateProduct(p: ProductForm): string[] {
 export function Products() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [lowStockThreshold, setLowStockThreshold] = useState(10);
     const [search, setSearch] = useState('');
     const [filterCategory, setFilterCategory] = useState(0);
     const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
@@ -70,9 +72,14 @@ export function Products() {
     });
 
     async function loadCategoriesAndSuppliers() {
-        const [cats, sups] = await Promise.all([getAll<Category>('categories'), getAll<Supplier>('suppliers')]);
+        const [cats, sups, threshold] = await Promise.all([
+            getAll<Category>('categories'),
+            getAll<Supplier>('suppliers'),
+            getLowStockThreshold(),
+        ]);
         setCategories(cats);
         setSuppliers(sups);
+        setLowStockThreshold(threshold);
         return { cats, sups };
     }
 
@@ -245,7 +252,7 @@ export function Products() {
 
     function getStockBadge(p: Product) {
         if (p.quantity === 0) return <span className="badge badge-danger">Sem estoque</span>;
-        if (p.quantity <= p.minStock) return <span className="badge badge-warning">Estoque baixo</span>;
+        if (isLowStock(p, lowStockThreshold)) return <span className="badge badge-warning">Estoque baixo</span>;
         return <span className="badge badge-success">Em estoque</span>;
     }
 

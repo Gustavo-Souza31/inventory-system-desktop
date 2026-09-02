@@ -5,6 +5,7 @@ import autoTable from 'jspdf-autotable';
 import { getAll } from '../database/sql-wrapper';
 import type { Product, Category, Movement } from '../database/types';
 import { StatsCard } from '../components/StatsCard';
+import { isLowStock, getLowStockThreshold } from '../utils/lowStock';
 
 type Period = '7d' | '30d' | 'week' | 'month' | 'all';
 
@@ -51,6 +52,7 @@ export function Reports() {
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [allMovements, setAllMovements] = useState<Movement[]>([]);
+    const [lowStockThreshold, setLowStockThreshold] = useState(10);
     const [period, setPeriod] = useState<Period>('30d');
     const [activeTab, setActiveTab] = useState<'dashboard' | 'stock' | 'movements' | 'value'>('dashboard');
 
@@ -60,6 +62,7 @@ export function Reports() {
             setCategories(await getAll<Category>('categories'));
             const movs = await getAll<Movement>('movements');
             setAllMovements(movs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            setLowStockThreshold(await getLowStockThreshold());
         }
         load();
     }, []);
@@ -143,8 +146,8 @@ export function Reports() {
                 startY: 26,
                 head: [['Produto', 'SKU', 'Categoria', 'Quantidade', 'Mínimo', 'Status', 'Valor Total']],
                 body: products.sort((a, b) => a.quantity - b.quantity).map((p) => [
-                    p.name, p.sku, getCategoryName(p.categoryId), String(p.quantity), String(p.minStock),
-                    p.quantity === 0 ? 'Sem estoque' : p.quantity <= p.minStock ? 'Baixo' : 'OK',
+                    p.name, p.sku, getCategoryName(p.categoryId), String(p.quantity), String(p.minStock > 0 ? p.minStock : lowStockThreshold),
+                    p.quantity === 0 ? 'Sem estoque' : isLowStock(p, lowStockThreshold) ? 'Baixo' : 'OK',
                     formatCurrency(p.price * p.quantity),
                 ]),
                 styles: { fontSize: 8 },
@@ -355,8 +358,8 @@ export function Reports() {
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {[
-                                { label: 'Em estoque', count: products.filter((p) => p.quantity > p.minStock).length, color: 'var(--success)', bg: 'var(--success-bg)' },
-                                { label: 'Estoque baixo', count: products.filter((p) => p.quantity > 0 && p.quantity <= p.minStock).length, color: 'var(--warning)', bg: 'var(--warning-bg)' },
+                                { label: 'Em estoque', count: products.filter((p) => !isLowStock(p, lowStockThreshold)).length, color: 'var(--success)', bg: 'var(--success-bg)' },
+                                { label: 'Estoque baixo', count: products.filter((p) => p.quantity > 0 && isLowStock(p, lowStockThreshold)).length, color: 'var(--warning)', bg: 'var(--warning-bg)' },
                                 { label: 'Sem estoque', count: products.filter((p) => p.quantity === 0).length, color: 'var(--danger)', bg: 'var(--danger-bg)' },
                             ].map((item) => {
                                 const pct = products.length > 0 ? (item.count / products.length) * 100 : 0;
@@ -399,10 +402,10 @@ export function Reports() {
                                     <td className="font-mono text-muted">{p.sku}</td>
                                     <td className="text-muted">{getCategoryName(p.categoryId)}</td>
                                     <td style={{ textAlign: 'right', fontWeight: 600 }} className="tabular-nums">{p.quantity} {p.unit}</td>
-                                    <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">{p.minStock}</td>
+                                    <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">{p.minStock > 0 ? p.minStock : lowStockThreshold}</td>
                                     <td>
                                         {p.quantity === 0 ? <span className="badge badge-danger">Sem estoque</span> :
-                                            p.quantity <= p.minStock ? <span className="badge badge-warning">Baixo</span> :
+                                            isLowStock(p, lowStockThreshold) ? <span className="badge badge-warning">Baixo</span> :
                                                 <span className="badge badge-success">OK</span>}
                                     </td>
                                     <td style={{ textAlign: 'right' }} className="tabular-nums">{formatCurrency(p.price * p.quantity)}</td>
