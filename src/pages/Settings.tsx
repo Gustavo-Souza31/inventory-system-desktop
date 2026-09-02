@@ -47,7 +47,7 @@ export function Settings() {
     async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
         if (!file) return;
-        if (!window.confirm('⚠️ Isto irá substituir TODOS os dados atuais. Deseja continuar?')) {
+        if (!window.confirm('⚠️ Isto irá substituir TODOS os dados atuais por este backup. Esta ação NÃO PODE SER DESFEITA. Deseja continuar?')) {
             e.target.value = '';
             return;
         }

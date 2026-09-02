@@ -49,3 +49,15 @@ export async function clearTable(table: string): Promise<void> {
     const { error } = await supabase.from(table).delete().neq('id', 0);
     if (error) throw new Error(error.message);
 }
+
+export async function rpc<T>(fn: string, params: Record<string, any>): Promise<T> {
+    const { data, error } = await supabase.rpc(fn, params);
+    if (error) {
+        // Junta message/details/hint do PostgrestError — pra erros vindos de
+        // RAISE EXCEPTION (restore_backup) ou de constraint violation, isso
+        // costuma trazer o motivo real (não uma mensagem genérica).
+        const parts = [error.message, error.details, error.hint].filter(Boolean);
+        throw new Error(parts.join(' — '));
+    }
+    return data as T;
+}
