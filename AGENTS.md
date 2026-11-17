@@ -36,10 +36,13 @@ Precisa de um `.env` na raiz (nunca commitar) com `VITE_SUPABASE_URL` e `VITE_SU
 
 | Agente | Ferramenta | Papel | Pode editar |
 |---|---|---|---|
-| Claude | Claude Code | Especificação, orquestração, revisão final, integração | Tudo |
+| Claude | Claude Code | Especificação, orquestração, revisão final, integração; também correções de lógica e banco (`src/database/`, `src/utils/`, `supabase/schema.sql`) | Tudo |
 | Gemini Hydrogen | Antigravity | Telas | `src/pages/`, `src/components/`, `src/index.css`, `src/hooks/` (só quando a tarefa pedir) |
-| Gemini Argon | Antigravity | Revisão independente | **Nada** — só escreve a revisão |
+| Gemini Argon | Antigravity | Revisão independente | **Nada** — responde a revisão no chat, não commita |
 | DeepSeek | OpenCode | Testes de ponta a ponta e trabalho mecânico | `tests/`, `e2e/`, configs de teste, e os arquivos que a tarefa listar |
+
+Lógica de negócio e acesso a dados (`src/database/`, `src/utils/`) e o banco são do Claude.
+Se uma tela precisar de algo novo ali, o Gemini pede na seção Observações em vez de implementar.
 
 Regras gerais para todos:
 
@@ -62,8 +65,9 @@ Regras gerais para todos:
 5. Commit + push do branch e abra um PR para `main` usando o template.
    O GitHub Actions roda o build automaticamente; com o CI vermelho, corrija antes de pedir revisão.
    O usuário avisa o Claude, que revisa e integra.
-6. Revisão do Argon: lê o diff do branch (`git diff main...<branch>`) e escreve em
-   `tasks/NNN-nome.review.md` — sem alterar código.
+6. Revisão do Argon (opcional, em conversa separada do Hydrogen): lê o diff do branch
+   (`git diff main...<branch>`) e responde **no chat** seguindo `tasks/_REVIEW_TEMPLATE.md`,
+   sem alterar código nem commitar. O usuário cola a revisão para o Claude, que decide o que aplicar.
 
 ## Convenções de código
 

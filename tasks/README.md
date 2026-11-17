@@ -7,7 +7,8 @@ Especificações de tarefas para os agentes. Regras completas em [`../AGENTS.md`
 - Cada tarefa é um arquivo `NNN-nome-curto.md`, criado a partir de [`_TEMPLATE.md`](_TEMPLATE.md).
 - O Claude escreve a especificação; o agente responsável implementa no branch indicado
   e preenche o **Relatório** no final do mesmo arquivo.
-- Revisões independentes (Gemini Argon) vão em `NNN-nome-curto.review.md`.
+- Revisões independentes (Gemini Argon) são respondidas no chat do Antigravity, no formato
+  de [`_REVIEW_TEMPLATE.md`](_REVIEW_TEMPLATE.md), e coladas para o Claude.
 
 ## Status
 
