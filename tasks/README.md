@@ -30,4 +30,4 @@ Cole no agente:
 
 | # | Tarefa | Agente | Status |
 |---|---|---|---|
-| — | (nenhuma ainda) | — | — |
+| [001](001-infra-testes-e2e.md) | Infraestrutura de testes E2E (Playwright) | DeepSeek | aberta |
