@@ -1,0 +1,25 @@
+name: Build
+
+# Roda em todo PR e em push nos branches dos agentes, para que nenhum
+# trabalho chegue à revisão sem compilar (tsc + vite build).
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+      - 'gemini/**'
+      - 'deepseek/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # O build não precisa das chaves do Supabase (só são lidas em runtime)
+      - run: npm run build

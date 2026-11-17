@@ -59,7 +59,9 @@ Regras gerais para todos:
    - DeepSeek: `deepseek/<nome-da-tarefa>`
 3. Implementa, roda `npm run build` (e os testes, se houver) até passar.
 4. Preenche a seção **Relatório** no próprio arquivo da tarefa e muda o status para `em revisão`.
-5. Commit + push do branch. O usuário avisa o Claude, que revisa e integra.
+5. Commit + push do branch e abra um PR para `main` usando o template.
+   O GitHub Actions roda o build automaticamente; com o CI vermelho, corrija antes de pedir revisão.
+   O usuário avisa o Claude, que revisa e integra.
 6. Revisão do Argon: lê o diff do branch (`git diff main...<branch>`) e escreve em
    `tasks/NNN-nome.review.md` — sem alterar código.
 
