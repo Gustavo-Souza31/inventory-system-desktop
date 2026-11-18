@@ -67,8 +67,8 @@ body,
     --border-radius-sm: 6px;
     --border-radius-lg: 14px;
 
-    /* Shadows — bem mais sutis que no escuro, fundo claro não precisa de
-       tanto peso pra comunicar elevação */
+    /* Shadows — mais fortes que no tema claro: sobre fundo quase preto,
+       sombra fraca some e o card perde a sensação de elevação */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
     --shadow-md: 0 3px 5px -2px rgba(0, 0, 0, 0.4), 0 7px 14px -5px rgba(0, 0, 0, 0.6);
     --shadow-lg: 0 -1px 3px rgba(0, 0, 0, 0.3), 0 12px 28px -8px rgba(0, 0, 0, 0.8);

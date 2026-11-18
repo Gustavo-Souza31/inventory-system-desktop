@@ -56,6 +56,8 @@ function createWindow() {
     width: 800,
     height: 600,
     title: `Empacota_${app.getVersion()}`,
+    // Mesma cor de --bg-primary: evita o flash branco antes do CSS carregar
+    backgroundColor: "#0a0a0a",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
