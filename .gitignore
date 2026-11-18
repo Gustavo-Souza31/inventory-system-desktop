@@ -37,3 +37,4 @@ server/data/
 
 # Temp
 *.txt.bak
+.agents/
