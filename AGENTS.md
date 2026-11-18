@@ -106,6 +106,15 @@ Armadilhas conhecidas:
 2. Ao chegar: `git fetch --all --prune`, `git pull`, atualizar as worktrees para `origin/main`
    e ler `tasks/README.md` para ver o que está em andamento.
 
+No Claude Code isso é automático (hooks em `.claude/settings.json`):
+
+- **Ao abrir a sessão** (`.claude/hooks/session-start.mjs`): faz `git fetch` e, se a pasta estiver
+  limpa e sem commits locais, `git pull --ff-only`. Havendo trabalho local ou divergência, não mexe
+  em nada e só avisa. Passa ao Claude o resumo (branch, alterações, branches sem push, tarefas).
+- **Ao fim de cada resposta** (`.claude/hooks/stop-check.mjs`): avisa o usuário se há alteração sem
+  commit, commit sem push ou worktree de agente suja. Só repete o aviso quando o estado muda.
+- Push continua sendo só quando o usuário pedir.
+
 ## Convenções de código
 
 - **TypeScript estrito**: sem `any` novo, sem `// @ts-ignore`. Tipos de dados ficam em `src/database/types.ts`.
