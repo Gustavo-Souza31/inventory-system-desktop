@@ -220,7 +220,7 @@ export async function commitImport(
             const key = row.data.categoryName.toLowerCase();
             categoryId = categoryMap.get(key) ?? null;
             if (categoryId === null) {
-                categoryId = await insert('categories', { name: row.data.categoryName, description: '', color: '#BF400D', createdAt: new Date() });
+                categoryId = await insert('categories', { name: row.data.categoryName, description: '', color: '#C6F432', createdAt: new Date() });
                 categoryMap.set(key, categoryId);
                 summary.createdCategories.push(row.data.categoryName);
             }
