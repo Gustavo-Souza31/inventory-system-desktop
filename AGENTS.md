@@ -69,6 +69,43 @@ Regras gerais para todos:
    (`git diff main...<branch>`) e responde **no chat** seguindo `tasks/_REVIEW_TEMPLATE.md`,
    sem alterar código nem commitar. O usuário cola a revisão para o Claude, que decide o que aplicar.
 
+## Ambiente local (dois PCs)
+
+O usuário alterna entre dois PCs (notebook e desktop), **um por vez**. Conversas e memória dos
+agentes não sincronizam entre máquinas — só o que está no GitHub. Por isso o estado de cada
+tarefa precisa estar sempre escrito em `tasks/`.
+
+**Worktrees** (pastas irmãs do repositório, `--detach` em `origin/main`; o agente cria o branch da tarefa nelas):
+
+| Pasta | Agente |
+|---|---|
+| `../inventory-wt-telas` | Gemini Hydrogen |
+| `../inventory-wt-revisao` | Gemini Argon (faz checkout do branch a revisar) |
+| `../inventory-wt-e2e` | DeepSeek |
+
+**Como o Claude chama os agentes** (sempre de dentro da worktree do agente):
+
+- Hydrogen: `agy -p "<tarefa>" --model gemini-4-hydrogen-high`
+- Argon: `agy -p "<tarefa>" --model gemini-4-argon-high`
+- DeepSeek: `"%APPDATA%\ai.opencode.desktop\cli\<versão>-x64\opencode-cli.exe" run -m opencode/deepseek-v4.1-flash-free "<tarefa>"`
+
+Armadilhas conhecidas:
+
+- **OpenCode:** use a CLI que vem com o **app desktop** (caminho acima; a versão muda com as
+  atualizações). **Nunca** instale o pacote npm `opencode-ai`: ele é mais antigo e quebra com
+  `Database is not empty and has no session table`.
+- **Antigravity CLI (`agy`)** é instalado separado do app Antigravity (`%LOCALAPPDATA%\agy\bin\agy.exe`).
+  Não instale nada chamado `agy` por npm.
+- No modo `-p`, o `agy` **nega sozinho comandos de terminal** (só lê e edita arquivos). Liberar
+  build/testes/git para ele é decisão do usuário — não use `--dangerously-skip-permissions` sem pedir.
+
+**Troca de PC:**
+
+1. Ao sair: atualizar status e relatório em `tasks/`, commit e push de tudo (main e branches
+   `claude/*`, `gemini/*`, `deepseek/*`, `feat/*`). Nada pode ficar só local.
+2. Ao chegar: `git fetch --all --prune`, `git pull`, atualizar as worktrees para `origin/main`
+   e ler `tasks/README.md` para ver o que está em andamento.
+
 ## Convenções de código
 
 - **TypeScript estrito**: sem `any` novo, sem `// @ts-ignore`. Tipos de dados ficam em `src/database/types.ts`.
