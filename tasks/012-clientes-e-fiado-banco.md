@@ -1,6 +1,6 @@
 # 012 — Clientes e venda fiado: banco e lógica
 
-- **Status:** aberta
+- **Status:** em revisão
 - **Agente:** Claude
 - **Branch:** `claude/clientes-fiado-banco`
 - **Depende de:** —
@@ -45,12 +45,10 @@ Existir no banco e em `src/utils/` o cadastro de clientes e o controle de saldo 
 
 ## Relatório
 
-_(preenchido pelo agente)_
-
-- Agente:
-- Branch:
-- O que foi feito:
-- Arquivos alterados:
-- Como testar:
-- `npm run build`:
-- Observações / dúvidas:
+- Agente: Claude
+- Branch: `claude/clientes-fiado-banco`
+- O que foi feito: tabelas `customers` e `customerEntries` (livro de lançamentos `fiado`/`pagamento`) com RLS; RPC `add_customer_entry` que valida cliente, valor e tipo, trava o cliente e recusa pagamento maior que o saldo; utilitários de saldo em centavos inteiros (sem erro de ponto flutuante); tipos `Customer` e `CustomerEntry`.
+- Arquivos alterados: `supabase/schema.sql`, `src/database/types.ts`, `src/utils/customerBalance.ts` (novo)
+- Como testar: **a migração NÃO foi aplicada no Supabase** (precisa da sua autorização). Depois: lançar fiado sem cliente (recusado), fiado de 100 e pagamento de 30 (saldo 70), pagamento de 100 (recusado), e conferir a RLS com outro usuário.
+- `npm run build`: passou
+- Observações / dúvidas: o PDV não tem tabela de vendas (cada venda vira movimentações de saída), então o lançamento não aponta para uma venda: a descrição guarda o resumo. Cliente com histórico não pode ser apagado (`ON DELETE RESTRICT`). A tarefa 009 (perfis) vai precisar migrar estas tabelas para `empresa_id`.
