@@ -46,12 +46,13 @@ Todo novo lojista lê e aceita os termos de uso e a política de privacidade ao 
 
 ## Relatório
 
-_(preenchido pelo agente)_
-
-- Agente:
-- Branch:
-- O que foi feito:
-- Arquivos alterados:
-- Como testar:
-- `npm run build`:
-- Observações / dúvidas:
+- Agente: Claude (parte do Claude; a caixa de aceite no cadastro é do Hydrogen e ainda não foi feita)
+- Branch: `claude/termos-lgpd`
+- O que foi feito: **rascunhos** dos Termos de Uso e da Política de Privacidade (`src/legal/*.md`, com os campos a preencher entre colchetes) e `src/legal/index.ts` com a versão `LEGAL_VERSION`; tabela `consents` (versão, data, RLS: só ler e inserir os próprios aceites); o trigger `handle_new_user` grava o aceite a partir do cadastro (a sessão ainda não existe antes de confirmar o e-mail); `register()` em `src/database/auth.ts` aceita o parâmetro opcional `termsVersion` e o envia.
+- Arquivos alterados: `supabase/schema.sql`, `src/database/auth.ts`, `src/legal/` (novo)
+- Como testar: **migração NÃO aplicada** (precisa da sua autorização). Depois: cadastrar uma conta chamando `register(..., LEGAL_VERSION)` e conferir a linha em `consents`.
+- `npm run build`: passou
+- **Pendente (por isso a tarefa segue bloqueada):**
+  1. **Você:** revisar os textos com um profissional e preencher os campos entre colchetes (nome da empresa/CNPJ, e-mail do encarregado de dados, foro, preço, prazos). Os textos são um ponto de partida, **não** assessoria jurídica.
+  2. **Hydrogen:** caixa de aceite no cadastro (`src/components/Login.tsx`) com links que abrem os textos num modal e botão desabilitado sem aceite, chamando `register(..., LEGAL_VERSION)`.
+- Observações / dúvidas: o aceite só é gravado para cadastros novos; contas já existentes não têm linha em `consents` e precisariam aceitar num próximo login (tarefa futura, se você quiser).

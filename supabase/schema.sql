@@ -179,6 +179,16 @@ BEGIN
         NEW.raw_user_meta_data->>'full_name',
         NEW.raw_user_meta_data->>'phone'
     );
+
+    -- Aceite dos termos e da política de privacidade (tarefa 003): a versão
+    -- aceita vem junto do cadastro (a sessão ainda não existe até confirmar o
+    -- e-mail, então o client não conseguiria gravar direto na tabela). O app
+    -- sempre envia a versão; contas criadas direto no painel do Supabase
+    -- (sem esse dado) são aceitas, mas ficam sem registro de aceite.
+    IF NULLIF(trim(NEW.raw_user_meta_data->>'accepted_terms_version'), '') IS NOT NULL THEN
+        INSERT INTO public.consents ("user_id", "termsVersion")
+        VALUES (NEW.id, trim(NEW.raw_user_meta_data->>'accepted_terms_version'));
+    END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
@@ -734,3 +744,31 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.add_customer_entry(bigint, text, numeric, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.add_customer_entry(bigint, text, numeric, text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.add_customer_entry(bigint, text, numeric, text) TO authenticated;
+
+-- ============================================================================
+-- Aceite dos termos e da política de privacidade (LGPD) — tarefa 003
+--
+-- Uma linha por aceite: quem aceitou, qual versão dos textos e quando. A linha
+-- do cadastro é criada pelo trigger handle_new_user() (acima). A pessoa pode
+-- ler os próprios aceites e registrar um novo (quando os textos mudarem), mas
+-- não alterar nem apagar o histórico.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS "consents" (
+    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "user_id" UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    "termsVersion" VARCHAR(50) NOT NULL CHECK (length(trim("termsVersion")) > 0),
+    "acceptedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE ("user_id", "termsVersion")
+);
+
+ALTER TABLE "consents" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "consents_select" ON "consents";
+CREATE POLICY "consents_select" ON "consents"
+    FOR SELECT USING (user_id = auth.uid());
+-- A data do aceite não pode ser inventada pelo cliente: tem de ser "agora".
+DROP POLICY IF EXISTS "consents_insert" ON "consents";
+CREATE POLICY "consents_insert" ON "consents"
+    FOR INSERT WITH CHECK (
+        user_id = auth.uid()
+        AND "acceptedAt" BETWEEN now() - interval '1 minute' AND now() + interval '1 minute'
+    );
