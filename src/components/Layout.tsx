@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard,
@@ -55,6 +55,7 @@ export function Layout() {
     const [companyName, setCompanyName] = useState<string | null>(null);
     const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
     const [showLowStock, setShowLowStock] = useState(false);
+    const hasCheckedInitialAlertsRef = useRef(false);
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
@@ -68,13 +69,27 @@ export function Layout() {
 
     // Layout monta uma vez por sessão válida (login novo ou restaurada ao
     // reabrir o app) — é o ponto natural para checar estoque baixo "ao entrar
-    // no sistema", sem distinguir os dois casos.
+    // no sistema", sem distinguir os dois casos. Nas navegações e edições
+    // seguintes, atualiza apenas o contador da barra lateral.
     useEffect(() => {
-        getLowStockAlerts().then((alerts) => {
-            setLowStockAlerts(alerts);
-            if (alerts.length > 0) setShowLowStock(true);
-        });
-    }, []);
+        let cancelled = false;
+        const refreshAlerts = () => {
+            getLowStockAlerts().then((alerts) => {
+                if (cancelled) return;
+                setLowStockAlerts(alerts);
+                if (!hasCheckedInitialAlertsRef.current) {
+                    hasCheckedInitialAlertsRef.current = true;
+                    if (alerts.length > 0) setShowLowStock(true);
+                }
+            });
+        };
+        refreshAlerts();
+        window.addEventListener('empacota:stock-changed', refreshAlerts);
+        return () => {
+            cancelled = true;
+            window.removeEventListener('empacota:stock-changed', refreshAlerts);
+        };
+    }, [location.pathname]);
 
     return (
         <div className="app-layout">
@@ -103,34 +118,38 @@ export function Layout() {
                 </div>
                 <nav className="sidebar-nav">
                     <div className="sidebar-section-label">Menu Principal</div>
-                    {navItems.map((item) => (
-                        <NavLink
-                            key={item.path}
-                            to={item.path}
-                            end={item.path === '/'}
-                            className={({ isActive }) =>
-                                `sidebar-link${isActive ? ' active' : ''}`
-                            }
-                            onClick={() => setSidebarOpen(false)}
-                        >
-                            <item.icon />
-                            {item.label}
-                        </NavLink>
-                    ))}
+                    {navItems.map((item) => {
+                        const showProductsBadge = item.path === '/produtos' && lowStockAlerts.length > 0;
+                        return (
+                            <NavLink
+                                key={item.path}
+                                to={item.path}
+                                end={item.path === '/'}
+                                className={({ isActive }) =>
+                                    `sidebar-link${isActive ? ' active' : ''}`
+                                }
+                                onClick={() => setSidebarOpen(false)}
+                                title={showProductsBadge ? `${item.label} (${lowStockAlerts.length} com estoque baixo)` : item.label}
+                            >
+                                <item.icon />
+                                <span className="sidebar-link-label">{item.label}</span>
+                                {showProductsBadge && (
+                                    <span className="badge badge-warning sidebar-badge">{lowStockAlerts.length}</span>
+                                )}
+                            </NavLink>
+                        );
+                    })}
                 </nav>
                 <div style={{ padding: '12px 10px', borderTop: '1px solid var(--border)' }}>
                     <button
                         className="sidebar-link"
-                        style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', justifyContent: 'space-between' }}
                         onClick={() => setShowLowStock(true)}
                         title="Produtos com estoque baixo"
                     >
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <Bell />
-                            Estoque baixo
-                        </span>
+                        <Bell />
+                        <span className="sidebar-link-label">Estoque baixo</span>
                         {lowStockAlerts.length > 0 && (
-                            <span className="badge badge-warning">{lowStockAlerts.length}</span>
+                            <span className="badge badge-warning sidebar-badge">{lowStockAlerts.length}</span>
                         )}
                     </button>
                 </div>
