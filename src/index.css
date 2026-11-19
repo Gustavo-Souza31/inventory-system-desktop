@@ -308,9 +308,14 @@ body,
     border-color: var(--accent);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
     background: var(--accent-hover);
     box-shadow: var(--shadow-glow);
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .btn-secondary {
