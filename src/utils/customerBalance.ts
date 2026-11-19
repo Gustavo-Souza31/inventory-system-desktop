@@ -1,4 +1,4 @@
-import { getAll, rpc } from '../database/sql-wrapper';
+import { findWhere, getAll, rpc } from '../database/sql-wrapper';
 import type { Customer, CustomerEntry } from '../database/types';
 
 export interface CustomerBalance {
@@ -22,9 +22,9 @@ export function computeBalance(entries: Pick<CustomerEntry, 'type' | 'amount'>[]
 }
 
 export async function getCustomerEntries(customerId: number): Promise<CustomerEntry[]> {
-    const all = await getAll<CustomerEntry>('customerEntries');
-    return all
-        .filter((e) => e.customerId === customerId)
+    // Filtra no banco: só os lançamentos deste cliente, não os da loja inteira.
+    const list = await findWhere<CustomerEntry>('customerEntries', { customerId });
+    return list
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 

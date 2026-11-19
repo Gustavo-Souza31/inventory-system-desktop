@@ -1,4 +1,4 @@
-import { getAll, insert, rpc, deleteById } from '../database/sql-wrapper';
+import { getAll, rpc } from '../database/sql-wrapper';
 import type { Product, ProductStock } from '../database/types';
 
 // Uma linha da tela de contagem: o que o sistema espera e o que foi contado.
@@ -79,9 +79,7 @@ export interface ApplyCountResult {
     reason?: string;
 }
 
-// Grava a contagem e aplica os ajustes. Só linhas contadas entram. O ajuste
-// (movimentações + estoque) roda numa única transação no banco. Se algo falhar
-// antes de aplicar, a contagem ainda está 'aberta' e é removida para não sobrar lixo.
+// Grava a contagem e aplica os ajustes. Só linhas contadas entram.
 export async function saveAndApplyCount(
     lines: CountLine[],
     locationId: number | null,
@@ -93,19 +91,16 @@ export async function saveAndApplyCount(
         throw new Error('As quantidades contadas devem ser números inteiros maiores ou iguais a zero.');
     }
 
-    const countId = await insert('stockCounts', { locationId, notes, status: 'aberta', createdAt: new Date() });
-    try {
-        for (const l of counted) {
-            await insert('stockCountItems', {
-                countId,
-                productId: l.productId,
-                expected: l.expected,
-                counted: l.counted,
-            });
-        }
-        return await rpc<ApplyCountResult>('apply_stock_count', { p_count_id: countId });
-    } catch (err) {
-        await deleteById('stockCounts', countId).catch(() => undefined);
-        throw err;
-    }
+    // Uma única chamada: o banco grava a contagem e os itens e aplica os ajustes
+    // na mesma transação. Se qualquer parte falhar, nada fica gravado (sem
+    // contagens órfãs, e uma contagem já aplicada nunca é apagada por engano).
+    return rpc<ApplyCountResult>('save_and_apply_stock_count', {
+        p_location_id: locationId,
+        p_notes: notes,
+        p_items: counted.map((l) => ({
+            productId: l.productId,
+            expected: l.expected,
+            counted: l.counted,
+        })),
+    });
 }
