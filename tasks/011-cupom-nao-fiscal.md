@@ -1,6 +1,6 @@
 # 011 — Impressão de cupom não fiscal no PDV
 
-- **Status:** aberta
+- **Status:** em revisão
 - **Agente:** Gemini Hydrogen
 - **Branch:** `gemini/cupom-nao-fiscal`
 - **Depende de:** —
@@ -43,12 +43,22 @@ Ao finalizar uma venda, o lojista pode imprimir um comprovante simples (cupom n�
 
 ## Relatório
 
-_(preenchido pelo agente)_
-
-- Agente:
-- Branch:
+- Agente: Gemini Hydrogen
+- Branch: `gemini/cupom-nao-fiscal` (alterações apenas no working tree local; sem commit/branch criado via terminal)
 - O que foi feito:
+  - Criado o componente `src/components/Receipt.tsx` exibindo nome da empresa (e CNPJ quando configurado), data/hora, número da venda, itens (quantidade, nome, preço unitário, percentual de desconto quando houver e subtotal), subtotal, desconto, total, forma de pagamento, valor pago/troco e a frase "Documento sem valor fiscal".
+  - Atualizada a tela `src/pages/Sales.tsx` para capturar o snapshot da venda finalizada, exibir o botão "Imprimir cupom" no modal de sucesso, e adicionar a aba "Vendas Realizadas" (reconstruída a partir das movimentações `Venda #...`) com busca, pré-visualização do cupom em modal e botão "Reimprimir". Também passou a registrar preço unitário e valor pago nas `notes` da movimentação para preservar valores históricos na reimpressão (mantendo compatibilidade com vendas anteriores).
+  - Ajustado `src/index.css` com estilos do cupom (80 mm, fonte monoespaçada, texto preto sobre fundo branco), regras de `@media print` ocultando menus/botões/interface do PDV e imprimindo somente `.receipt-print-area` em `@page { size: 80mm auto; margin: 0; }`, além de layout responsivo do PDV e da lista de vendas para largura de celular.
 - Arquivos alterados:
+  - Criado: `src/components/Receipt.tsx`
+  - Alterados: `src/pages/Sales.tsx`, `src/index.css`, `tasks/011-cupom-nao-fiscal.md`
 - Como testar:
-- `npm run build`:
+  1. Em Configurações, preencha o nome da empresa (opcionalmente o CNPJ) e salve.
+  2. Acesse **Vendas**, adicione produtos ao carrinho (teste também com desconto e pagamento em Dinheiro informando Valor Pago) e clique em **Finalizar Venda**.
+  3. No modal de sucesso, clique em **Imprimir cupom** e confira na pré-visualização de impressão que aparece apenas o cupom em 80 mm, fonte monoespaçada, texto preto sobre fundo branco e a frase "Documento sem valor fiscal".
+  4. Acesse a aba **Vendas Realizadas**, clique em **Cupom** para pré-visualizar ou em **Reimprimir** para abrir a impressão diretamente.
+  5. Redimensione a janela para largura de celular (~375 px) e verifique que o PDV, os botões do modal e a lista de vendas com o botão **Reimprimir** ficam acessíveis sem rolagem horizontal.
+- `npm run build`: não executado (execução de comandos de terminal desabilitada nesta sessão; código verificado por leitura estática).
 - Observações / dúvidas:
+  - Como não existe tabela separada de vendas no banco, a lista de vendas agrupa os registros de `movements` com `type = 'saida'` e `reason` iniciando em `Venda #`. Vendas antigas gravadas antes desta alteração não possuem `Preço:` e `Pago:` nas `notes`, então a reimpressão usa o preço atual do produto cadastrado como fallback.
+  - Nenhum comando git (`checkout -b`, `commit`) ou `npm run build` foi executado devido à restrição de não usar terminal.
