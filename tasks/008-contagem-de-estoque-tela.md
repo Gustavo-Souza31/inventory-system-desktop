@@ -1,6 +1,6 @@
 # 008 — Contagem de estoque: tela
 
-- **Status:** aberta
+- **Status:** em revisão
 - **Agente:** Gemini Hydrogen
 - **Branch:** `gemini/contagem-estoque-tela`
 - **Depende de:** 007
@@ -42,12 +42,10 @@ O lojista abre "Contagem", digita a quantidade contada de cada produto, vê as d
 
 ## Relatório
 
-_(preenchido pelo agente)_
-
-- Agente:
-- Branch:
-- O que foi feito:
-- Arquivos alterados:
-- Como testar:
-- `npm run build`:
-- Observações / dúvidas:
+- Agente: Gemini Hydrogen
+- Branch: `gemini/contagem-estoque-tela`
+- O que foi feito: criada a tela `src/pages/StockCount.tsx` com seletor de local ("Estoque total" ou locais cadastrados, com confirmação antes de trocar caso já existam quantidades digitadas), busca via `SearchBar`, filtro por status (todos/contados/com diferença/não contados), cards de resumo (`StatsCard`), tabela responsiva (que vira cards empilhados em `<= 700px`), campo "contado" para inteiros `>= 0`, coluna de diferença colorida (sobra em `--success`, falta em `--danger`, igual em neutro), `Modal` de resumo antes da confirmação listando apenas os itens com diferença e campo opcional de observações, e `ConfirmDialog` antes de chamar `saveAndApplyCount`. Adicionada a rota `/contagem` em `src/App.tsx`, item "Contagem" no menu em `src/components/Layout.tsx` e classes `.stock-count-*` em `src/index.css` usando apenas variáveis de tema.
+- Arquivos alterados: `src/pages/StockCount.tsx` (novo), `src/App.tsx`, `src/components/Layout.tsx`, `src/index.css`, `tasks/008-contagem-de-estoque-tela.md`
+- Como testar: rodar `npm run build` e abrir a rota `/contagem` pelo menu "Contagem". Testar: (1) digitar quantidades iguais, maiores (sobra) e menores (falta) que o esperado e confirmar — itens iguais ao esperado não devem gerar movimentação de ajuste; (2) trocar de local com itens já contados; (3) abrir no viewport de celular (`<= 700px`) para verificar a grade de cartões sem rolagem horizontal.
+- `npm run build`: não executado (execução de comandos de terminal desabilitada nesta chamada)
+- Observações / dúvidas: `src/database/` e `src/utils/` não foram alterados. A tabela usa os utilitários `loadCountLines`, `lineDifference`, `summarizeCount` e `saveAndApplyCount` de `src/utils/stockCount.ts`. Como o terminal estava bloqueado nesta sessão, ainda é necessário rodar `npm run build` e fazer o commit/push no branch `gemini/contagem-estoque-tela`.
