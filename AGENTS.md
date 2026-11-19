@@ -94,7 +94,7 @@ Armadilhas conhecidas:
 - **OpenCode:** use a CLI que vem com o **app desktop** (caminho acima; a versão muda com as
   atualizações). **Nunca** instale o pacote npm `opencode-ai`: ele é mais antigo e quebra com
   `Database is not empty and has no session table`.
-- **Antigravity CLI (`agy`)** é instalado separado do app Antigravity (`%LOCALAPPDATA%\agy\bin\agy.exe`).
+- **Antigravity CLI (`agy`)** é instalado separado do app Antigravity (o caminho varia por PC: no desktop está em `%USERPROFILE%\.gemini\bin\agy.exe`, fora do PATH; confira com `where agy` ou procure por `agy.exe`).
   Não instale nada chamado `agy` por npm.
 - No modo `-p`, o `agy` **nega sozinho comandos de terminal** (só lê e edita arquivos). Liberar
   build/testes/git para ele é decisão do usuário — não use `--dangerously-skip-permissions` sem pedir.
@@ -121,7 +121,7 @@ No Claude Code isso é automático (hooks em `.claude/settings.json`):
 - **Acesso a dados**: use `sql-wrapper` / `useCrud`; não chame `supabase.from(...)` espalhado pelas páginas.
   Erros de banco passam por `translateDbError` antes de chegar ao usuário.
 - **Estilo**: use as variáveis de `src/index.css` (`--bg-*`, `--accent`, `--text-*` etc.) e Open Props.
-  Nada de cor hexadecimal solta em componente. Respeite o tema claro/escuro existente.
+  Nada de cor hexadecimal solta em componente. O app usa o tema escuro (preto, branco e verde-limão `#C6F432`), definido nas variáveis de `src/index.css`.
 - **Ícones**: só `lucide-react`.
 - **Componentes**: reutilize `Modal`, `ConfirmDialog`, `EmptyState`, `SearchBar`, `StatsCard` antes de criar novos.
 - **Texto da interface em português do Brasil**. Comentários de código em português, explicando o *porquê*.

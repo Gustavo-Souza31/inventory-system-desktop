@@ -33,7 +33,7 @@ Por que estamos fazendo isso e o que já existe no código que é relevante
 
 - [ ] `npm run build` passa sem erros
 - [ ] ...
-- [ ] Funciona no tema claro e escuro
+- [ ] Usa só variáveis de `src/index.css` (tema escuro atual)
 - [ ] Funciona na largura de celular
 
 ---
