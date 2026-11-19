@@ -56,3 +56,13 @@ Todo novo lojista lê e aceita os termos de uso e a política de privacidade ao 
   1. **Você:** revisar os textos com um profissional e preencher os campos entre colchetes (nome da empresa/CNPJ, e-mail do encarregado de dados, foro, preço, prazos). Os textos são um ponto de partida, **não** assessoria jurídica.
   2. **Hydrogen:** caixa de aceite no cadastro (`src/components/Login.tsx`) com links que abrem os textos num modal e botão desabilitado sem aceite, chamando `register(..., LEGAL_VERSION)`.
 - Observações / dúvidas: o aceite só é gravado para cadastros novos; contas já existentes não têm linha em `consents` e precisariam aceitar num próximo login (tarefa futura, se você quiser).
+
+### Parte do Hydrogen
+
+- Agente: Gemini Hydrogen
+- Branch: atual da worktree (sem alteração de branch/commit; comandos de terminal desabilitados)
+- O que foi feito: adicionada a caixa de aceite dos Termos de Uso e da Política de Privacidade na tela de cadastro em `src/components/Login.tsx`, com links que abrem `termsOfUse` e `privacyPolicy` (de `src/legal`) no componente `Modal` preservando quebras de linha (`white-space: pre-wrap`); botão de criar conta desabilitado sem o aceite (com estilo `:disabled` em `src/index.css`) e guarda no `handleSubmit`; chamada a `register(email, password, fullName, phone, LEGAL_VERSION)`.
+- Arquivos alterados: `src/components/Login.tsx`, `src/index.css`
+- Como testar: abrir a tela de login, alternar para "Criar conta", verificar que o botão "Criar conta" inicia desabilitado, clicar em "Termos de Uso" e "Política de Privacidade" para abrir os modais de leitura, marcar a caixa de aceite e confirmar que o botão habilita e o cadastro envia `LEGAL_VERSION`.
+- `npm run build`: não executado (execução restrita a leitura e edição de arquivos, sem comandos de terminal)
+- Observações / dúvidas: item 2 das pendências no relatório anterior foi implementado na tela; a tarefa permanece `bloqueada` aguardando revisão jurídica dos textos e aplicação da migração no Supabase.
