@@ -6,7 +6,8 @@ import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
 
-const COLORS = ['#6c5ce7', '#00c9a7', '#ffc53d', '#ff6b6b', '#4ea8de', '#a78bfa', '#f97316', '#ec4899'];
+// '#c6f432' (verde-limão da marca) é também a cor padrão das categorias criadas na importação
+const COLORS = ['#c6f432', '#6c5ce7', '#00c9a7', '#ffc53d', '#ff6b6b', '#4ea8de', '#a78bfa', '#f97316', '#ec4899'];
 
 type EnrichedCategory = Category & { productCount: number };
 type CategoryForm = { name: string; description: string; color: string };
