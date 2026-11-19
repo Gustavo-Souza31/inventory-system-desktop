@@ -31,7 +31,7 @@ Cole no agente:
 
 | # | Tarefa | Agente | Status |
 |---|---|---|---|
-| [001](001-infra-testes-e2e.md) | Infraestrutura de testes E2E (Playwright) | DeepSeek | aberta |
+| [001](001-infra-testes-e2e.md) | Infraestrutura de testes E2E (Playwright) | DeepSeek | em revisão |
 
 ### Plano para abrir o app a pequenos lojistas
 
