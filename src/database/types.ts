@@ -91,7 +91,8 @@ export interface StockCountItem {
     productId: number;
     expected: number;
     counted: number;
-=======
+}
+
 export interface Customer {
     id?: number;
     name: string;
