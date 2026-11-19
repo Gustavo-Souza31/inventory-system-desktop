@@ -39,12 +39,10 @@ Definir se o app será grátis, pago ou grátis com limite, e como o limite ser�
 
 ## Relatório
 
-_(preenchido pelo agente)_
-
-- Agente:
-- Branch:
-- O que foi feito:
-- Arquivos alterados:
-- Como testar:
-- `npm run build`:
-- Observações / dúvidas:
+- Agente: Claude (proposta pronta; a decisão é sua)
+- Branch: `claude/piloto-e-decisoes`
+- O que foi feito: `docs/decisao-cobranca.md` com o contexto de mercado, os custos fixos a cobrir, três modelos (freemium, assinatura única, por usuário), comparação, recomendação condicionada ao piloto, novas tarefas se houver cobrança e espaço para registrar a decisão.
+- Arquivos alterados: `docs/decisao-cobranca.md` (novo)
+- Como testar: ler o documento e preencher a seção "Decisão" depois do piloto.
+- `npm run build`: não aplicável (só documentação)
+- Observações / dúvidas: **continua bloqueada** até o resultado do piloto. Não defini preços: os limites e valores são hipóteses para validar com os lojistas. Os valores dos concorrentes vêm de agregadores e variam entre fontes; confirmar nos sites oficiais.

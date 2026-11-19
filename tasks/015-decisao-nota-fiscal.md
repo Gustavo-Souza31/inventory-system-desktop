@@ -39,12 +39,10 @@ Decidir, com base no piloto, se o app vai emitir nota fiscal e de que forma.
 
 ## Relatório
 
-_(preenchido pelo agente)_
-
-- Agente:
-- Branch:
-- O que foi feito:
-- Arquivos alterados:
-- Como testar:
-- `npm run build`:
-- Observações / dúvidas:
+- Agente: Claude (comparação pronta; a decisão é sua)
+- Branch: `claude/piloto-e-decisoes`
+- O que foi feito: `docs/decisao-nota-fiscal.md` com as três opções (integrar com ERP, serviço emissor, não emitir), comparação, recomendação condicionada ao piloto, novas tarefas se houver implementação e espaço para registrar a decisão.
+- Arquivos alterados: `docs/decisao-nota-fiscal.md` (novo)
+- Como testar: ler o documento e preencher a seção "Decisão" depois do piloto.
+- `npm run build`: não aplicável (só documentação)
+- Observações / dúvidas: **continua bloqueada** até o resultado do piloto. As informações de preço e as regras fiscais são gerais e precisam ser confirmadas nos sites dos fornecedores e com um contador. Nada de nota fiscal foi implementado.

@@ -43,12 +43,10 @@ Colocar o app na mão de poucos lojistas reais, por 2 a 4 semanas, e descobrir o
 
 ## Relatório
 
-_(preenchido pelo agente)_
-
-- Agente:
-- Branch:
-- O que foi feito:
-- Arquivos alterados:
-- Como testar:
-- `npm run build`:
-- Observações / dúvidas:
+- Agente: Claude (material preparado; o piloto em si é com você)
+- Branch: `claude/piloto-e-decisoes`
+- O que foi feito: roteiro do piloto (`docs/piloto/roteiro.md`: pré-requisitos, instalação, tarefas de teste, acompanhamento semanal, perguntas de fechamento e regras de privacidade) e planilha de feedback (`docs/piloto/feedback.md`: lojistas, pedidos com gravidade, contagem de pedidos, disposição a pagar e resumo final).
+- Arquivos alterados: `docs/piloto/roteiro.md` e `docs/piloto/feedback.md` (novos)
+- Como testar: ler o roteiro e adaptar as perguntas ao seu público.
+- `npm run build`: não aplicável (só documentação)
+- Observações / dúvidas: **a tarefa continua bloqueada**: depende de a fase 1 estar concluída (suporte, termos revisados, backup do Supabase confirmado e instalador assinado) e de você escolher os lojistas. Não iniciei nenhum contato com lojistas.
