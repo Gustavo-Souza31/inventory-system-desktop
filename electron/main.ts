@@ -72,6 +72,9 @@ function createWindow() {
     if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
   };
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // window.open('', '_blank') (about:blank) é usado pela impressão de etiquetas
+    // de código de barras: precisa abrir uma janela do próprio app.
+    if (!url || url === "about:blank") return { action: "allow" };
     openExternally(url);
     return { action: "deny" };
   });
@@ -79,7 +82,7 @@ function createWindow() {
     // Navegação para fora do app (links sem target="_blank", como o mailto:).
     // No dev server o app vive em http://localhost; empacotado, em file://.
     const devUrl = process.env.VITE_DEV_SERVER_URL;
-    const isAppUrl = url.startsWith("file:") || (devUrl !== undefined && url.startsWith(devUrl));
+    const isAppUrl = url.startsWith("file:") || (Boolean(devUrl) && url.startsWith(devUrl as string));
     if (!isAppUrl) {
       event.preventDefault();
       openExternally(url);
