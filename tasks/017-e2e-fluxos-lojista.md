@@ -1,6 +1,6 @@
 # 017 — Testes E2E dos fluxos principais do lojista
 
-- **Status:** bloqueada
+- **Status:** em revisão
 - **Agente:** DeepSeek
 - **Branch:** `deepseek/e2e-fluxos-lojista`
 - **Depende de:** 001 e, para cada fluxo, a tarefa da funcionalidade (006, 008, 011, 013)
@@ -34,10 +34,10 @@ Ter testes que criam dados em uma conta de teste e verificam os fluxos principai
 
 ## Critérios de pronto
 
-- [ ] `npm run build` passa sem erros
-- [ ] Cada teste limpa os dados que criou
-- [ ] Nenhuma credencial no diff
-- [ ] Testes de funcionalidades ainda não integradas estão com `test.skip` e motivo
+- [x] `npm run build` passa sem erros
+- [x] Cada teste limpa os dados que criou
+- [x] Nenhuma credencial no diff
+- [x] Testes de funcionalidades ainda não integradas estão com `test.skip` e motivo
 
 ---
 
@@ -45,10 +45,39 @@ Ter testes que criam dados em uma conta de teste e verificam os fluxos principai
 
 _(preenchido pelo agente)_
 
-- Agente:
-- Branch:
+- Agente: DeepSeek
+- Branch: `deepseek/e2e-fluxos-lojista`
 - O que foi feito:
-- Arquivos alterados:
+  - `e2e/helpers.ts` ganhou utilitários para os fluxos: checagem de credenciais,
+    sufixo único por execução, cadastro de produto pela tela de Produtos, conferência
+    da quantidade na tabela e exclusão do produto (limpeza).
+  - `e2e/venda.spec.ts`: teste real do PDV — cadastra produto com estoque 5, busca
+    pelo SKU, adiciona ao carrinho, paga R$ 20,00 em dinheiro (total R$ 10,00,
+    confere o troco de R$ 10,00), finaliza a venda e confere que o estoque foi para 4.
+    O produto é excluído no `finally` (as movimentações caem por `ON DELETE CASCADE`).
+  - `e2e/estoque-baixo.spec.ts`, `e2e/contagem.spec.ts` e `e2e/fiado.spec.ts`:
+    testes com `test.skip` e motivo explícito, porque as tarefas 006, 008 e 013 ainda
+    não estão integradas nesta branch. Cada um tem o roteiro previsto comentado para
+    quando a funcionalidade chegar. Todos também se auto-ignoram sem E2E_EMAIL/E2E_PASSWORD.
+  - `e2e/README.md` atualizado com a lista de specs, quais precisam de credenciais e
+    como limpar restos de uma execução que falhou.
+- Arquivos alterados: `e2e/helpers.ts`, `e2e/venda.spec.ts` (novo),
+  `e2e/estoque-baixo.spec.ts` (novo), `e2e/contagem.spec.ts` (novo),
+  `e2e/fiado.spec.ts` (novo), `e2e/README.md`, `tasks/017-e2e-fluxos-lojista.md`
 - Como testar:
-- `npm run build`:
+  1. `npx playwright install chromium` (uma vez por máquina)
+  2. preencher `E2E_EMAIL` e `E2E_PASSWORD` no `.env` com uma conta de teste (nunca a real)
+  3. `npm run build`
+  4. `npm run test:e2e`
+  Sem as variáveis, `login.spec.ts` roda e os demais aparecem como *skipped*.
+- `npm run build`: passou
 - Observações / dúvidas:
+  - O fluxo de venda não pôde ser executado de verdade nesta máquina: o `.env` local
+    só tem `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`, sem `E2E_EMAIL`/`E2E_PASSWORD`.
+    Com a conta de teste configurada, `venda.spec.ts` passa a rodar; os seletores foram
+    escritos a partir de `src/pages/Products.tsx` e `src/pages/Sales.tsx`.
+  - A tarefa 011 (cupom não fiscal) não tem spec previsto na 017; nada foi criado para ela.
+  - Os testes de 006/008/013 estão prontos como esqueleto documentado; ao integrar cada
+    funcionalidade, basta remover o `test.skip(true, ...)` do arquivo correspondente e
+    seguir o roteiro comentado.
+
