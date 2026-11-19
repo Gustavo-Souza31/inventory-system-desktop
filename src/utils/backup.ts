@@ -34,6 +34,38 @@ export async function exportDatabase(): Promise<void> {
     link.download = `inventario_backup_${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
+    markBackupDone();
+}
+
+const LAST_BACKUP_KEY = 'empacota:lastBackupAt';
+
+// Data do último backup manual feito neste computador (só um lembrete: o
+// armazenamento do navegador pode ser limpo, e o backup de verdade é o do
+// Supabase). Retorna null se nunca foi feito ou se o armazenamento falhar.
+export function getLastBackupAt(): Date | null {
+    try {
+        const raw = localStorage.getItem(LAST_BACKUP_KEY);
+        if (!raw) return null;
+        const date = new Date(raw);
+        return Number.isNaN(date.getTime()) ? null : date;
+    } catch {
+        return null;
+    }
+}
+
+function markBackupDone(): void {
+    try {
+        localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
+    } catch {
+        // Sem localStorage (modo restrito): o lembrete só não aparece.
+    }
+}
+
+// Dias desde o último backup manual, ou null se nunca houve.
+export function daysSinceLastBackup(now: Date = new Date()): number | null {
+    const last = getLastBackupAt();
+    if (!last) return null;
+    return Math.floor((now.getTime() - last.getTime()) / 86_400_000);
 }
 
 interface RestoreSummary {
