@@ -1,6 +1,6 @@
 # 007 — Contagem de estoque (inventário físico): banco e lógica
 
-- **Status:** aberta
+- **Status:** em revisão
 - **Agente:** Claude
 - **Branch:** `claude/contagem-estoque-banco`
 - **Depende de:** —
@@ -43,12 +43,10 @@ Existir no banco e em `src/utils/` o que permite registrar uma contagem física 
 
 ## Relatório
 
-_(preenchido pelo agente)_
-
-- Agente:
-- Branch:
-- O que foi feito:
-- Arquivos alterados:
-- Como testar:
-- `npm run build`:
-- Observações / dúvidas:
+- Agente: Claude
+- Branch: `claude/contagem-estoque-banco`
+- O que foi feito: tabelas `stockCounts` e `stockCountItems` com RLS; RPC `apply_stock_count(p_count_id)` atômica e idempotente (contagem já aplicada devolve `applied: false` sem duplicar ajustes); utilitários de contagem para a tela; tipos `StockCount` e `StockCountItem`. Os nomes das tabelas e da RPC seguem o inglês/camelCase do schema existente (a spec dizia `contagens`/`aplicar_contagem`).
+- Arquivos alterados: `supabase/schema.sql`, `src/database/types.ts`, `src/utils/stockCount.ts` (novo)
+- Como testar: **a migração NÃO foi aplicada no Supabase** (precisa da sua autorização). Depois de aplicar: criar contagem com diferença, chamar a RPC duas vezes e conferir que só a primeira gera movimentação 'Ajuste de contagem'; testar com outro usuário para ver a RLS.
+- `npm run build`: passou
+- Observações / dúvidas: sem local, o contado vira o estoque total do produto; com local, ajusta o saldo do local e move o total pela mesma diferença. `restore_backup` não inclui as tabelas novas (comentado no schema).

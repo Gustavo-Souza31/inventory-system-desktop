@@ -509,3 +509,132 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.restore_backup(jsonb) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.restore_backup(jsonb) FROM anon;
 GRANT EXECUTE ON FUNCTION public.restore_backup(jsonb) TO authenticated;
+
+-- ============================================================================
+-- Contagem de estoque (inventário físico) — tarefa 007
+--
+-- Uma "contagem" guarda o que o lojista contou de cada produto (opcionalmente
+-- num local). apply_stock_count() transforma as diferenças em movimentações de
+-- ajuste e acerta o estoque, tudo numa transação. Uma contagem só pode ser
+-- aplicada uma vez (status 'aplicada'), então chamar a função de novo não
+-- duplica nenhum ajuste.
+--
+-- Observação: restore_backup() não inclui estas tabelas. Ao restaurar, os
+-- produtos são recriados com ids novos e os itens das contagens antigas caem
+-- em cascata; contagens já aplicadas ficam apenas como histórico.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS "stockCounts" (
+    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "user_id" UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    "locationId" BIGINT REFERENCES "locations"("id") ON DELETE SET NULL,
+    "status" VARCHAR(20) NOT NULL DEFAULT 'aberta' CHECK ("status" IN ('aberta', 'aplicada')),
+    "notes" TEXT,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    "appliedAt" TIMESTAMPTZ
+);
+
+ALTER TABLE "stockCounts" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "stockCounts_owner" ON "stockCounts";
+CREATE POLICY "stockCounts_owner" ON "stockCounts"
+    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+CREATE TABLE IF NOT EXISTS "stockCountItems" (
+    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "user_id" UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    "countId" BIGINT NOT NULL REFERENCES "stockCounts"("id") ON DELETE CASCADE,
+    "productId" BIGINT NOT NULL REFERENCES "products"("id") ON DELETE CASCADE,
+    "expected" INTEGER NOT NULL CHECK ("expected" >= 0),
+    "counted" INTEGER NOT NULL CHECK ("counted" >= 0),
+    UNIQUE ("countId", "productId")
+);
+
+ALTER TABLE "stockCountItems" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "stockCountItems_owner" ON "stockCountItems";
+CREATE POLICY "stockCountItems_owner" ON "stockCountItems"
+    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- SECURITY INVOKER: roda com o auth.uid() de quem chamou, então a RLS acima
+-- continua valendo (mesmo padrão de restore_backup).
+CREATE OR REPLACE FUNCTION public.apply_stock_count(p_count_id bigint)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+    v_user_id uuid := auth.uid();
+    v_count public."stockCounts"%ROWTYPE;
+    v_item record;
+    v_current int;
+    v_base int;
+    v_diff int;
+    v_new_total int;
+    v_adjusted int := 0;
+BEGIN
+    -- Trava a linha da contagem: duas chamadas simultâneas esperam uma pela outra.
+    SELECT * INTO v_count FROM public."stockCounts"
+    WHERE id = p_count_id AND user_id = v_user_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Contagem % não encontrada', p_count_id;
+    END IF;
+
+    IF v_count.status = 'aplicada' THEN
+        RETURN jsonb_build_object('applied', false, 'adjusted', 0, 'reason', 'Contagem já aplicada');
+    END IF;
+
+    FOR v_item IN
+        SELECT "productId", counted FROM public."stockCountItems"
+        WHERE "countId" = p_count_id AND user_id = v_user_id
+    LOOP
+        SELECT quantity INTO v_current FROM public.products
+        WHERE id = v_item."productId" AND user_id = v_user_id
+        FOR UPDATE;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Produto % não encontrado', v_item."productId";
+        END IF;
+
+        IF v_count."locationId" IS NULL THEN
+            -- Contagem do estoque total: o valor contado vira o total.
+            v_base := v_current;
+            v_diff := v_item.counted - v_base;
+            v_new_total := v_item.counted;
+        ELSE
+            -- Contagem de um local: ajusta o local e move o total na mesma diferença.
+            SELECT COALESCE(
+                (SELECT quantity FROM public."productStock"
+                 WHERE "productId" = v_item."productId" AND "locationId" = v_count."locationId" AND user_id = v_user_id),
+                0) INTO v_base;
+            v_diff := v_item.counted - v_base;
+            v_new_total := GREATEST(0, v_current + v_diff);
+
+            INSERT INTO public."productStock" (user_id, "productId", "locationId", quantity)
+            VALUES (v_user_id, v_item."productId", v_count."locationId", v_item.counted)
+            ON CONFLICT ("productId", "locationId") DO UPDATE SET quantity = EXCLUDED.quantity;
+        END IF;
+
+        IF v_diff <> 0 THEN
+            INSERT INTO public.movements (user_id, "productId", type, quantity, reason, notes, "locationId", date, "createdAt")
+            VALUES (
+                v_user_id, v_item."productId",
+                CASE WHEN v_diff > 0 THEN 'entrada' ELSE 'saida' END,
+                abs(v_diff), 'Ajuste de contagem', COALESCE(v_count.notes, ''),
+                v_count."locationId", now(), now()
+            );
+            UPDATE public.products SET quantity = v_new_total, "updatedAt" = now()
+            WHERE id = v_item."productId" AND user_id = v_user_id;
+            v_adjusted := v_adjusted + 1;
+        END IF;
+    END LOOP;
+
+    UPDATE public."stockCounts" SET status = 'aplicada', "appliedAt" = now() WHERE id = p_count_id;
+
+    RETURN jsonb_build_object('applied', true, 'adjusted', v_adjusted);
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.apply_stock_count(bigint) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.apply_stock_count(bigint) FROM anon;
+GRANT EXECUTE ON FUNCTION public.apply_stock_count(bigint) TO authenticated;
