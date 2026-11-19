@@ -1044,6 +1044,116 @@ body,
     margin-bottom: 16px;
 }
 
+/* ===== STOCK COUNT ===== */
+.stock-count-toolbar-left {
+    flex-wrap: wrap;
+}
+
+.stock-count-select {
+    width: 220px;
+}
+
+.stock-count-filter {
+    width: 170px;
+}
+
+.stock-count-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    border-radius: var(--border-radius-sm);
+    font-size: 13px;
+    border: 1px solid var(--border);
+}
+
+.stock-count-banner.success {
+    background: var(--success-bg);
+    color: var(--success);
+    border-color: var(--success-bg);
+}
+
+.stock-count-banner.warning {
+    background: var(--warning-bg);
+    color: var(--warning);
+    border-color: var(--warning-bg);
+}
+
+.stock-count-banner.danger {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: var(--danger-bg);
+}
+
+.stock-count-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.stock-count-input-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.stock-count-input {
+    width: 96px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    padding: 7px 10px;
+}
+
+.stock-count-mobile-label {
+    display: none;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.badge-neutral {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.stock-count-review-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+}
+
+.stock-count-review-headline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.stock-count-review-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.stock-count-review-list {
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-sm);
+    background: var(--bg-card);
+}
+
 /* ===== RESPONSIVE ===== */
 
 /* Hamburger toggle button (hidden by default, shown on small screens) */
@@ -1287,6 +1397,107 @@ body,
         width: 100%;
         flex: 1;
         min-width: 150px;
+    }
+
+    .stock-count-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .stock-count-stats .stat-card {
+        padding: 12px;
+        gap: 10px;
+        min-width: 0;
+    }
+
+    .stock-count-stats .stat-card-icon {
+        width: 34px;
+        height: 34px;
+    }
+
+    .stock-count-stats .stat-card-value {
+        font-size: 18px;
+    }
+
+    .stock-count-toolbar-left {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .stock-count-toolbar-left .search-bar {
+        max-width: none;
+    }
+
+    .stock-count-select,
+    .stock-count-filter {
+        width: 100%;
+    }
+
+    .stock-count-toolbar-right {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .stock-count-toolbar-right .btn {
+        width: 100%;
+    }
+
+    .stock-count-table {
+        min-width: 0;
+    }
+
+    .stock-count-table thead {
+        display: none;
+    }
+
+    .stock-count-table tbody tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .stock-count-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .stock-count-table tbody td {
+        display: block;
+        padding: 0;
+        border-bottom: none;
+        text-align: left !important;
+    }
+
+    .stock-count-table tbody td.stock-count-cell-product {
+        grid-column: 1 / -1;
+    }
+
+    .stock-count-table tbody td.stock-count-cell-diff {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .stock-count-mobile-label {
+        display: block;
+    }
+
+    .stock-count-cell-diff .stock-count-mobile-label {
+        margin-bottom: 0;
+    }
+
+    .stock-count-input-wrap {
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .stock-count-input {
+        width: 100%;
+        max-width: 140px;
     }
 }
 

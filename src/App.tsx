@@ -13,6 +13,7 @@ import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { Locations } from './pages/Locations';
 import { Sales } from './pages/Sales';
+import { StockCount } from './pages/StockCount';
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -43,6 +44,7 @@ function App() {
         <Route path="/categorias" element={<Categories />} />
         <Route path="/fornecedores" element={<Suppliers />} />
         <Route path="/movimentacoes" element={<Movements />} />
+        <Route path="/contagem" element={<StockCount />} />
         <Route path="/locais" element={<Locations />} />
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/configuracoes" element={<Settings />} />
