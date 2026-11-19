@@ -245,7 +245,8 @@ SECURITY INVOKER
 SET search_path = public
 AS $$
 DECLARE
-    v_user_id uuid := auth.uid();
+    -- Dono da loja (não o próprio auth.uid()): os dados da loja pertencem ao dono.
+    v_user_id uuid := public.current_owner_id();
     v_elem jsonb;
     v_new_id bigint;
     v_old_category_id bigint;
@@ -267,6 +268,9 @@ DECLARE
 BEGIN
     IF v_user_id IS NULL THEN
         RAISE EXCEPTION 'restore_backup: usuário não autenticado.';
+    END IF;
+    IF public.current_role_name() <> 'dono' THEN
+        RAISE EXCEPTION 'restore_backup: só o dono da loja pode restaurar um backup.';
     END IF;
 
     DROP TABLE IF EXISTS _id_map;
@@ -509,3 +513,272 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.restore_backup(jsonb) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.restore_backup(jsonb) FROM anon;
 GRANT EXECUTE ON FUNCTION public.restore_backup(jsonb) TO authenticated;
+
+-- ============================================================================
+-- Perfis de usuário (dono / gerente / caixa) — tarefa 009
+--
+-- Modelo: a "loja" é o usuário DONO. Todas as linhas já têm user_id = dono,
+-- então os dados atuais continuam valendo sem migração. Um membro (gerente ou
+-- caixa) é uma conta que aponta para o dono em "members"; a partir daí as
+-- políticas passam a usar current_owner_id() no lugar de auth.uid(), e o
+-- papel (current_role_name()) decide o que cada um pode fazer.
+--
+--   dono    : tudo, inclusive configurações, equipe e restaurar backup
+--   gerente : tudo, menos configurações, equipe e restaurar backup
+--   caixa   : vender (ler produtos/estoque/clientes, registrar movimentações e
+--             fiado, baixar estoque). Não cadastra nem apaga nada.
+--
+-- LIMITAÇÃO CONHECIDA: o caixa precisa ler "products" para vender (a baixa de
+-- estoque do PDV acontece no cliente), então o preço de custo é ocultado só na
+-- interface, não no banco. Fechar isso exige mover a venda para uma RPC e dar
+-- ao caixa apenas uma view sem custo. Fica como tarefa futura.
+--
+-- Um usuário pertence a UMA loja. Uma conta que já tem dados próprios não pode
+-- ser adicionada como membro (os dados dela ficariam invisíveis).
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS "members" (
+    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "ownerId" UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    "memberId" UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    "role" VARCHAR(20) NOT NULL CHECK ("role" IN ('gerente', 'caixa')),
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE ("memberId"),
+    CHECK ("ownerId" <> "memberId")
+);
+
+ALTER TABLE "members" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "members_select" ON "members";
+-- Só leitura direta; inserir/alterar/remover passa pelas RPCs abaixo.
+CREATE POLICY "members_select" ON "members"
+    FOR SELECT USING ("ownerId" = auth.uid() OR "memberId" = auth.uid());
+
+-- SECURITY DEFINER para ler "members" sem passar pela RLS (as próprias
+-- políticas das outras tabelas chamam estas funções; sem isso haveria recursão).
+CREATE OR REPLACE FUNCTION public.current_owner_id()
+RETURNS uuid
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT COALESCE((SELECT "ownerId" FROM public.members WHERE "memberId" = auth.uid()), auth.uid());
+$$;
+
+CREATE OR REPLACE FUNCTION public.current_role_name()
+RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT COALESCE((SELECT "role" FROM public.members WHERE "memberId" = auth.uid()), 'dono');
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.current_owner_id() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.current_owner_id() FROM anon;
+GRANT EXECUTE ON FUNCTION public.current_owner_id() TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.current_role_name() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.current_role_name() FROM anon;
+GRANT EXECUTE ON FUNCTION public.current_role_name() TO authenticated;
+
+-- Papel e dono do usuário logado, para a interface montar o menu.
+CREATE OR REPLACE FUNCTION public.my_access()
+RETURNS jsonb
+LANGUAGE sql STABLE SECURITY INVOKER
+SET search_path = public
+AS $$
+    SELECT jsonb_build_object('role', public.current_role_name(), 'ownerId', public.current_owner_id());
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.my_access() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.my_access() FROM anon;
+GRANT EXECUTE ON FUNCTION public.my_access() TO authenticated;
+
+-- --- Gestão da equipe (somente o dono) ------------------------------------
+CREATE OR REPLACE FUNCTION public.add_member(p_email text, p_role text)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_owner uuid := auth.uid();
+    v_target uuid;
+BEGIN
+    IF v_owner IS NULL OR public.current_role_name() <> 'dono' THEN
+        RAISE EXCEPTION 'Somente o dono da loja pode gerenciar a equipe';
+    END IF;
+    IF p_role NOT IN ('gerente', 'caixa') THEN
+        RAISE EXCEPTION 'Papel inválido: %', p_role;
+    END IF;
+
+    SELECT id INTO v_target FROM auth.users WHERE lower(email) = lower(trim(p_email));
+    IF v_target IS NULL THEN
+        RAISE EXCEPTION 'Nenhuma conta encontrada com esse e-mail. A pessoa precisa criar a conta no app primeiro.';
+    END IF;
+    IF v_target = v_owner THEN
+        RAISE EXCEPTION 'Você já é o dono desta loja';
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.members WHERE "memberId" = v_target) THEN
+        RAISE EXCEPTION 'Essa conta já faz parte de uma equipe';
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.products WHERE user_id = v_target)
+       OR EXISTS (SELECT 1 FROM public.movements WHERE user_id = v_target) THEN
+        RAISE EXCEPTION 'Essa conta já tem dados próprios no app e ficariam invisíveis. Use uma conta nova.';
+    END IF;
+
+    INSERT INTO public.members ("ownerId", "memberId", "role") VALUES (v_owner, v_target, p_role);
+    RETURN jsonb_build_object('memberId', v_target, 'role', p_role);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.set_member_role(p_member_id uuid, p_role text)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    IF auth.uid() IS NULL OR public.current_role_name() <> 'dono' THEN
+        RAISE EXCEPTION 'Somente o dono da loja pode gerenciar a equipe';
+    END IF;
+    IF p_role NOT IN ('gerente', 'caixa') THEN
+        RAISE EXCEPTION 'Papel inválido: %', p_role;
+    END IF;
+    UPDATE public.members SET "role" = p_role WHERE "ownerId" = auth.uid() AND "memberId" = p_member_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Membro não encontrado';
+    END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.remove_member(p_member_id uuid)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    IF auth.uid() IS NULL OR public.current_role_name() <> 'dono' THEN
+        RAISE EXCEPTION 'Somente o dono da loja pode gerenciar a equipe';
+    END IF;
+    DELETE FROM public.members WHERE "ownerId" = auth.uid() AND "memberId" = p_member_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Membro não encontrado';
+    END IF;
+END;
+$$;
+
+-- Lista a equipe com e-mail e nome (auth.users não é legível pelo cliente).
+CREATE OR REPLACE FUNCTION public.list_members()
+RETURNS TABLE ("memberId" uuid, "email" text, "fullName" text, "role" text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    IF auth.uid() IS NULL OR public.current_role_name() <> 'dono' THEN
+        RAISE EXCEPTION 'Somente o dono da loja pode gerenciar a equipe';
+    END IF;
+    RETURN QUERY
+        SELECT m."memberId", u.email::text, p."fullName"::text, m."role"::text
+        FROM public.members m
+        JOIN auth.users u ON u.id = m."memberId"
+        LEFT JOIN public.profiles p ON p.user_id = m."memberId"
+        WHERE m."ownerId" = auth.uid()
+        ORDER BY m."createdAt";
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.add_member(text, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.add_member(text, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.add_member(text, text) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.set_member_role(uuid, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.set_member_role(uuid, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.set_member_role(uuid, text) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.remove_member(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.remove_member(uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.remove_member(uuid) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.list_members() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.list_members() FROM anon;
+GRANT EXECUTE ON FUNCTION public.list_members() TO authenticated;
+
+-- --- Políticas por papel ----------------------------------------------------
+-- Gera as políticas de cada tabela a partir de uma matriz. Tabelas que ainda
+-- não existem são ignoradas (as das tarefas 007 e 012 só existem depois que
+-- aquelas migrações forem aplicadas): rode este bloco de novo depois delas.
+--   cs = caixa lê | ci = caixa insere | cu = caixa altera
+--   gw = gerente escreve (false = só o dono escreve)
+-- Apagar é sempre só dono/gerente. O DEFAULT de user_id passa a ser o dono, para
+-- que um membro grave as linhas em nome da loja.
+DO $roles$
+DECLARE
+    v_matrix jsonb := '{
+        "categories":       {"cs": true,  "ci": false, "cu": false, "gw": true},
+        "suppliers":        {"cs": false, "ci": false, "cu": false, "gw": true},
+        "locations":        {"cs": true,  "ci": false, "cu": false, "gw": true},
+        "productStock":     {"cs": true,  "ci": true,  "cu": true,  "gw": true},
+        "products":         {"cs": true,  "ci": false, "cu": true,  "gw": true},
+        "movements":        {"cs": true,  "ci": true,  "cu": false, "gw": true},
+        "priceHistory":     {"cs": false, "ci": false, "cu": false, "gw": true},
+        "settings":         {"cs": true,  "ci": false, "cu": false, "gw": false},
+        "stockCounts":      {"cs": false, "ci": false, "cu": false, "gw": true},
+        "stockCountItems":  {"cs": false, "ci": false, "cu": false, "gw": true},
+        "customers":        {"cs": true,  "ci": true,  "cu": false, "gw": true},
+        "customerEntries":  {"cs": true,  "ci": true,  "cu": false, "gw": true}
+    }'::jsonb;
+    v_table text;
+    v_cfg jsonb;
+    v_write text;
+    v_read text;
+    v_ins text;
+    v_upd text;
+    v_owner text := 'user_id = public.current_owner_id()';
+BEGIN
+    FOR v_table, v_cfg IN SELECT key, value FROM jsonb_each(v_matrix) LOOP
+        IF to_regclass(format('public.%I', v_table)) IS NULL THEN
+            CONTINUE;
+        END IF;
+
+        -- escrita total: dono sempre; gerente se gw
+        v_write := CASE WHEN (v_cfg->>'gw')::boolean
+            THEN 'public.current_role_name() IN (''dono'', ''gerente'')'
+            ELSE 'public.current_role_name() = ''dono''' END;
+        v_read := format('public.current_role_name() IN (''dono'', ''gerente'')%s',
+            CASE WHEN (v_cfg->>'cs')::boolean THEN ' OR public.current_role_name() = ''caixa''' ELSE '' END);
+        v_ins := format('(%s)%s', v_write,
+            CASE WHEN (v_cfg->>'ci')::boolean THEN ' OR public.current_role_name() = ''caixa''' ELSE '' END);
+        v_upd := format('(%s)%s', v_write,
+            CASE WHEN (v_cfg->>'cu')::boolean THEN ' OR public.current_role_name() = ''caixa''' ELSE '' END);
+
+        EXECUTE format('ALTER TABLE public.%I ALTER COLUMN user_id SET DEFAULT public.current_owner_id()', v_table);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', v_table || '_owner', v_table);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', v_table || '_select', v_table);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', v_table || '_insert', v_table);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', v_table || '_update', v_table);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', v_table || '_delete', v_table);
+
+        EXECUTE format('CREATE POLICY %I ON public.%I FOR SELECT USING (%s AND (%s))',
+            v_table || '_select', v_table, v_owner, v_read);
+        EXECUTE format('CREATE POLICY %I ON public.%I FOR INSERT WITH CHECK (%s AND (%s))',
+            v_table || '_insert', v_table, v_owner, v_ins);
+        EXECUTE format('CREATE POLICY %I ON public.%I FOR UPDATE USING (%s AND (%s)) WITH CHECK (%s AND (%s))',
+            v_table || '_update', v_table, v_owner, v_upd, v_owner, v_upd);
+        EXECUTE format('CREATE POLICY %I ON public.%I FOR DELETE USING (%s AND (%s))',
+            v_table || '_delete', v_table, v_owner, v_write);
+    END LOOP;
+END
+$roles$;
+
+-- O caixa pode alterar produtos (baixa de estoque), mas só a quantidade:
+-- preço, custo, nome etc. continuam travados.
+CREATE OR REPLACE FUNCTION public.restrict_cashier_product_update()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+    IF public.current_role_name() = 'caixa'
+       AND (to_jsonb(NEW) - 'quantity' - 'updatedAt') IS DISTINCT FROM (to_jsonb(OLD) - 'quantity' - 'updatedAt') THEN
+        RAISE EXCEPTION 'O caixa só pode alterar a quantidade em estoque';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS "products_restrict_cashier" ON public.products;
+CREATE TRIGGER "products_restrict_cashier"
+    BEFORE UPDATE ON public.products
+    FOR EACH ROW EXECUTE FUNCTION public.restrict_cashier_product_update();
