@@ -556,6 +556,55 @@ CREATE POLICY "stockCountItems_owner" ON "stockCountItems"
 -- SECURITY INVOKER: roda com o auth.uid() de quem chamou, então a RLS acima
 -- continua valendo (mesmo padrão de restore_backup).
 CREATE OR REPLACE FUNCTION public.apply_stock_count(p_count_id bigint)
+=======
+-- Clientes e venda fiado — tarefa 012
+--
+-- "customers" é o cadastro; "customerEntries" é o livro de lançamentos de cada
+-- cliente: um 'fiado' aumenta o que ele deve, um 'pagamento' diminui. O saldo
+-- devedor é sempre a soma dos fiados menos a soma dos pagamentos (não é
+-- guardado em coluna, para nunca ficar fora de sincronia).
+--
+-- O PDV não tem tabela de vendas (cada venda vira movimentações de saída), por
+-- isso o lançamento não aponta para uma venda: a descrição guarda o resumo.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS "customers" (
+    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "user_id" UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    "name" VARCHAR(255) NOT NULL,
+    "phone" VARCHAR(30) NOT NULL DEFAULT '',
+    "notes" TEXT,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE "customers" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "customers_owner" ON "customers";
+CREATE POLICY "customers_owner" ON "customers"
+    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- ON DELETE RESTRICT: não dá para apagar um cliente que tem histórico.
+CREATE TABLE IF NOT EXISTS "customerEntries" (
+    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "user_id" UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    "customerId" BIGINT NOT NULL REFERENCES "customers"("id") ON DELETE RESTRICT,
+    "type" VARCHAR(20) NOT NULL CHECK ("type" IN ('fiado', 'pagamento')),
+    "amount" DECIMAL(10,2) NOT NULL CHECK ("amount" > 0),
+    "description" TEXT,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE "customerEntries" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "customerEntries_owner" ON "customerEntries";
+CREATE POLICY "customerEntries_owner" ON "customerEntries"
+    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+-- Registra um lançamento com validação e trava do cliente (evita dois
+-- pagamentos simultâneos passarem do saldo). SECURITY INVOKER: a RLS vale.
+CREATE OR REPLACE FUNCTION public.add_customer_entry(
+    p_customer_id bigint,
+    p_type text,
+    p_amount numeric,
+    p_description text DEFAULT ''
+)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY INVOKER
@@ -638,3 +687,43 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.apply_stock_count(bigint) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.apply_stock_count(bigint) FROM anon;
 GRANT EXECUTE ON FUNCTION public.apply_stock_count(bigint) TO authenticated;
+=======
+    v_balance numeric;
+    v_entry_id bigint;
+BEGIN
+    IF p_customer_id IS NULL THEN
+        RAISE EXCEPTION 'Selecione o cliente';
+    END IF;
+    IF p_type NOT IN ('fiado', 'pagamento') THEN
+        RAISE EXCEPTION 'Tipo de lançamento inválido: %', p_type;
+    END IF;
+    IF p_amount IS NULL OR p_amount <= 0 THEN
+        RAISE EXCEPTION 'O valor deve ser maior que zero';
+    END IF;
+
+    PERFORM 1 FROM public.customers WHERE id = p_customer_id AND user_id = v_user_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Cliente % não encontrado', p_customer_id;
+    END IF;
+
+    SELECT COALESCE(SUM(CASE WHEN type = 'fiado' THEN amount ELSE -amount END), 0) INTO v_balance
+    FROM public."customerEntries" WHERE "customerId" = p_customer_id AND user_id = v_user_id;
+
+    IF p_type = 'pagamento' AND p_amount > v_balance THEN
+        RAISE EXCEPTION 'O pagamento (%) é maior que o saldo devedor (%)', p_amount, v_balance;
+    END IF;
+
+    INSERT INTO public."customerEntries" (user_id, "customerId", type, amount, description)
+    VALUES (v_user_id, p_customer_id, p_type, p_amount, COALESCE(p_description, ''))
+    RETURNING id INTO v_entry_id;
+
+    RETURN jsonb_build_object(
+        'entryId', v_entry_id,
+        'balance', CASE WHEN p_type = 'fiado' THEN v_balance + p_amount ELSE v_balance - p_amount END
+    );
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.add_customer_entry(bigint, text, numeric, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.add_customer_entry(bigint, text, numeric, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.add_customer_entry(bigint, text, numeric, text) TO authenticated;

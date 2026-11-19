@@ -91,4 +91,20 @@ export interface StockCountItem {
     productId: number;
     expected: number;
     counted: number;
+=======
+export interface Customer {
+    id?: number;
+    name: string;
+    phone: string;
+    notes: string;
+    createdAt: Date;
+}
+
+export interface CustomerEntry {
+    id?: number;
+    customerId: number;
+    type: 'fiado' | 'pagamento';
+    amount: number;
+    description: string;
+    createdAt: Date;
 }
