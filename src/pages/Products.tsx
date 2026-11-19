@@ -16,7 +16,9 @@ import { BarcodeLabel } from '../components/BarcodeLabel';
 import { PriceHistoryModal } from '../components/PriceHistoryModal';
 import { ImportPreviewModal } from '../components/ImportPreviewModal';
 import { parseImportFile, markDuplicates, downloadImportTemplate, commitImport, type ImportRow } from '../utils/import';
+import { canSeeCost } from '../utils/permissions';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
+import { useRole } from '../components/Layout';
 
 type ProductForm = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>;
 
@@ -34,6 +36,11 @@ function validateProduct(p: ProductForm): string[] {
 }
 
 export function Products() {
+    const role = useRole();
+    const showCost = canSeeCost(role);
+    // O caixa usa Produtos só para consulta (banco também bloqueia cadastro/edição).
+    const canEdit = role !== 'caixa';
+
     const [categories, setCategories] = useState<Category[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [lowStockThreshold, setLowStockThreshold] = useState(10);
@@ -125,7 +132,7 @@ export function Products() {
     }
 
     useBarcodeScanner({
-        enabled: !modalOpen && !deleteTarget && !barcodeProduct && !priceHistoryProduct && !importRows,
+        enabled: canEdit && !modalOpen && !deleteTarget && !barcodeProduct && !priceHistoryProduct && !importRows,
         onScan: handleBarcodeScan,
     });
 
@@ -155,7 +162,7 @@ export function Products() {
 
         setSaveError(null);
         setFormWarning(
-            form.costPrice > form.price
+            showCost && form.costPrice > form.price
                 ? 'Atenção: o preço de custo é maior que o preço de venda. O produto será salvo mesmo assim.'
                 : null
         );
@@ -192,14 +199,26 @@ export function Products() {
         doc.setFontSize(9);
         doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 21);
 
-        autoTable(doc, {
-            startY: 26,
-            head: [['Nome', 'SKU', 'Categoria', 'Preço', 'Custo', 'Quantidade', 'Mínimo', 'Unidade']],
-            body: filtered.map((p) => [
+        const head = showCost
+            ? [['Nome', 'SKU', 'Categoria', 'Preço', 'Custo', 'Quantidade', 'Mínimo', 'Unidade']]
+            : [['Nome', 'SKU', 'Categoria', 'Preço', 'Quantidade', 'Mínimo', 'Unidade']];
+
+        const body = filtered.map((p) => (showCost
+            ? [
                 p.name, p.sku, getCategoryName(p.categoryId),
                 formatCurrency(p.price), formatCurrency(p.costPrice),
                 String(p.quantity), String(p.minStock), p.unit,
-            ]),
+            ]
+            : [
+                p.name, p.sku, getCategoryName(p.categoryId),
+                formatCurrency(p.price),
+                String(p.quantity), String(p.minStock), p.unit,
+            ]));
+
+        autoTable(doc, {
+            startY: 26,
+            head,
+            body,
             styles: { fontSize: 8 },
             headStyles: { fillColor: [191, 64, 13] },
         });
@@ -276,10 +295,14 @@ export function Products() {
                 </div>
                 <div className="toolbar-right">
                     <button className="btn btn-secondary" onClick={handleExportPdf} title="Exportar PDF"><Download size={16} /> PDF</button>
-                    <button className="btn btn-secondary" onClick={downloadImportTemplate} title="Baixar modelo de importação"><FileSpreadsheet size={16} /> Modelo</button>
-                    <button className="btn btn-secondary" onClick={() => importInputRef.current?.click()} title="Importar produtos de CSV/Excel"><Upload size={16} /> Importar</button>
-                    <input ref={importInputRef} type="file" accept=".csv,.xlsx,.xls" style={{ display: 'none' }} onChange={handleImportFileSelected} />
-                    <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Produto</button>
+                    {canEdit && (
+                        <>
+                            <button className="btn btn-secondary" onClick={downloadImportTemplate} title="Baixar modelo de importação"><FileSpreadsheet size={16} /> Modelo</button>
+                            <button className="btn btn-secondary" onClick={() => importInputRef.current?.click()} title="Importar produtos de CSV/Excel"><Upload size={16} /> Importar</button>
+                            <input ref={importInputRef} type="file" accept=".csv,.xlsx,.xls" style={{ display: 'none' }} onChange={handleImportFileSelected} />
+                            <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Produto</button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -296,7 +319,12 @@ export function Products() {
             )}
 
             {filtered.length === 0 ? (
-                <EmptyState icon={Package} title="Nenhum produto encontrado" description={search ? 'Tente outra busca.' : 'Adicione seu primeiro produto para começar.'} action={!search ? <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Produto</button> : undefined} />
+                <EmptyState
+                    icon={Package}
+                    title="Nenhum produto encontrado"
+                    description={search ? 'Tente outra busca.' : canEdit ? 'Adicione seu primeiro produto para começar.' : 'Nenhum produto cadastrado ainda.'}
+                    action={!search && canEdit ? <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Produto</button> : undefined}
+                />
             ) : (
                 <div className="table-container">
                     <table className="table">
@@ -306,10 +334,10 @@ export function Products() {
                                 <th>SKU</th>
                                 <th>Categoria</th>
                                 <th style={{ textAlign: 'right' }}>Preço</th>
-                                <th style={{ textAlign: 'right' }}>Custo</th>
+                                {showCost && <th style={{ textAlign: 'right' }}>Custo</th>}
                                 <th style={{ textAlign: 'right' }}>Quantidade</th>
                                 <th>Status</th>
-                                <th style={{ width: '140px' }}>Ações</th>
+                                <th style={{ width: canEdit ? '140px' : '60px' }}>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -327,15 +355,19 @@ export function Products() {
                                     <td><span className="font-mono">{p.sku}</span></td>
                                     <td className="text-muted">{getCategoryName(p.categoryId)}</td>
                                     <td style={{ textAlign: 'right' }} className="tabular-nums">{formatCurrency(p.price)}</td>
-                                    <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">{formatCurrency(p.costPrice)}</td>
+                                    {showCost && <td style={{ textAlign: 'right' }} className="text-muted tabular-nums">{formatCurrency(p.costPrice)}</td>}
                                     <td style={{ textAlign: 'right', fontWeight: 600 }} className="tabular-nums">{p.quantity} {p.unit}</td>
                                     <td>{getStockBadge(p)}</td>
                                     <td>
                                         <div className="table-actions">
                                             <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setBarcodeProduct(p)} title="Etiqueta"><Barcode size={14} /></button>
-                                            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setPriceHistoryProduct(p)} title="Histórico de preços"><History size={14} /></button>
-                                            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(p)} title="Editar"><Pencil size={14} /></button>
-                                            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeleteTarget(p)} title="Excluir"><Trash2 size={14} /></button>
+                                            {canEdit && (
+                                                <>
+                                                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setPriceHistoryProduct(p)} title="Histórico de preços"><History size={14} /></button>
+                                                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(p)} title="Editar"><Pencil size={14} /></button>
+                                                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeleteTarget(p)} title="Excluir"><Trash2 size={14} /></button>
+                                                </>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -392,10 +424,12 @@ export function Products() {
                             <label className="form-label">Preço de venda (R$)</label>
                             <input className="form-input" type="number" step="0.01" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
                         </div>
-                        <div className="form-group">
-                            <label className="form-label">Preço de custo (R$)</label>
-                            <input className="form-input" type="number" step="0.01" min="0" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: Number(e.target.value) })} />
-                        </div>
+                        {showCost && (
+                            <div className="form-group">
+                                <label className="form-label">Preço de custo (R$)</label>
+                                <input className="form-input" type="number" step="0.01" min="0" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: Number(e.target.value) })} />
+                            </div>
+                        )}
                     </div>
                     <div className="form-row">
                         <div className="form-group">

@@ -839,6 +839,71 @@ body,
     border-bottom: none;
 }
 
+/* ===== SIDEBAR USER META & TEAM ===== */
+.sidebar-user-meta {
+    padding: 0 8px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.team-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.team-list {
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-sm);
+    overflow: hidden;
+}
+
+.team-member-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+
+.team-member-row:last-child {
+    border-bottom: none;
+}
+
+.team-member-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.team-member-name {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.team-member-email {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.team-member-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.team-role-select {
+    width: 130px;
+}
+
 /* ===== PRODUCT THUMBNAIL ===== */
 .product-thumb {
     width: 38px;
@@ -1027,7 +1092,8 @@ body,
     }
 
     .sidebar-logo-text,
-    .sidebar-section-label {
+    .sidebar-section-label,
+    .sidebar-user-meta {
         display: none;
     }
 
@@ -1097,6 +1163,10 @@ body,
         display: block;
     }
 
+    .sidebar-user-meta {
+        display: flex;
+    }
+
     .sidebar-link {
         justify-content: flex-start;
         padding: 10px 12px;
@@ -1149,8 +1219,28 @@ body,
         align-items: stretch;
     }
 
+    .toolbar-left,
+    .toolbar-right {
+        flex-wrap: wrap;
+    }
+
     .toolbar .form-input {
         width: 100%;
+    }
+
+    .team-member-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .team-member-actions {
+        justify-content: space-between;
+    }
+
+    .team-role-select {
+        flex: 1;
+        width: auto;
     }
 }
 

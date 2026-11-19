@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, Navigate, useOutletContext } from 'react-router-dom';
 import {
     LayoutDashboard,
     Package,
@@ -15,24 +15,36 @@ import {
     X,
     LogOut,
     Bell,
+    type LucideIcon,
 } from 'lucide-react';
 import { logout } from '../database/auth';
+import { getMyAccess, type Role } from '../database/access';
 import { supabase } from '../database/supabaseClient';
 import { getAll } from '../database/sql-wrapper';
 import { getLowStockAlerts, type LowStockAlert } from '../utils/lowStock';
+import { canAccess, roleLabel, type Area } from '../utils/permissions';
 import { LowStockModal } from './LowStockModal';
 import type { Settings as SettingsType } from '../database/types';
 
-const navItems = [
-    { label: 'Painel', path: '/', icon: LayoutDashboard },
-    { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
-    { label: 'Produtos', path: '/produtos', icon: Package },
-    { label: 'Categorias', path: '/categorias', icon: Tags },
-    { label: 'Fornecedores', path: '/fornecedores', icon: Truck },
-    { label: 'Movimentações', path: '/movimentacoes', icon: ArrowLeftRight },
-    { label: 'Locais', path: '/locais', icon: MapPin },
-    { label: 'Relatórios', path: '/relatorios', icon: BarChart3 },
-    { label: 'Configurações', path: '/configuracoes', icon: Settings },
+export interface LayoutContext {
+    role: Role;
+}
+
+export function useRole(): Role {
+    const ctx = useOutletContext<LayoutContext | null>();
+    return ctx?.role ?? 'dono';
+}
+
+const navItems: { label: string; path: string; icon: LucideIcon; area: Area }[] = [
+    { label: 'Painel', path: '/', icon: LayoutDashboard, area: 'painel' },
+    { label: 'Vendas', path: '/vendas', icon: ShoppingCart, area: 'vendas' },
+    { label: 'Produtos', path: '/produtos', icon: Package, area: 'produtos' },
+    { label: 'Categorias', path: '/categorias', icon: Tags, area: 'categorias' },
+    { label: 'Fornecedores', path: '/fornecedores', icon: Truck, area: 'fornecedores' },
+    { label: 'Movimentações', path: '/movimentacoes', icon: ArrowLeftRight, area: 'movimentacoes' },
+    { label: 'Locais', path: '/locais', icon: MapPin, area: 'locais' },
+    { label: 'Relatórios', path: '/relatorios', icon: BarChart3, area: 'relatorios' },
+    { label: 'Configurações', path: '/configuracoes', icon: Settings, area: 'configuracoes' },
 ];
 
 const pageTitles: Record<string, string> = {
@@ -55,9 +67,26 @@ export function Layout() {
     const [companyName, setCompanyName] = useState<string | null>(null);
     const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
     const [showLowStock, setShowLowStock] = useState(false);
+    const [role, setRole] = useState<Role | null>(null);
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+    }, []);
+
+    // Carrega o papel uma vez ao entrar; se falhar (ex.: conta antiga ou RPC
+    // indisponível), assume dono para não bloquear o acesso existente.
+    useEffect(() => {
+        let active = true;
+        getMyAccess()
+            .then((access) => {
+                if (!active) return;
+                const r = access?.role;
+                setRole(r === 'dono' || r === 'gerente' || r === 'caixa' ? r : 'dono');
+            })
+            .catch(() => {
+                if (active) setRole('dono');
+            });
+        return () => { active = false; };
     }, []);
 
     useEffect(() => {
@@ -75,6 +104,17 @@ export function Layout() {
             if (alerts.length > 0) setShowLowStock(true);
         });
     }, []);
+
+    if (role === null) {
+        return null;
+    }
+
+    const visibleNavItems = navItems.filter((item) => canAccess(role, item.area));
+    const currentItem = navItems.find((item) => item.path === location.pathname);
+    if (currentItem && !canAccess(role, currentItem.area)) {
+        const fallbackPath = visibleNavItems[0]?.path ?? '/vendas';
+        return <Navigate to={fallbackPath} replace />;
+    }
 
     return (
         <div className="app-layout">
@@ -103,7 +143,7 @@ export function Layout() {
                 </div>
                 <nav className="sidebar-nav">
                     <div className="sidebar-section-label">Menu Principal</div>
-                    {navItems.map((item) => (
+                    {visibleNavItems.map((item) => (
                         <NavLink
                             key={item.path}
                             to={item.path}
@@ -135,8 +175,11 @@ export function Layout() {
                     </button>
                 </div>
                 <div style={{ padding: '12px 10px', borderTop: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: '11px', padding: '0 8px 8px' }} className="text-muted truncate">
-                        {email}
+                    <div className="sidebar-user-meta">
+                        <div style={{ fontSize: '11px', maxWidth: '100%' }} className="text-muted truncate">
+                            {email}
+                        </div>
+                        <span className="badge badge-purple">{roleLabel(role)}</span>
                     </div>
                     <button
                         className="sidebar-link"
@@ -154,7 +197,7 @@ export function Layout() {
                     {companyName && <span className="page-header-company">{companyName}</span>}
                 </header>
                 <div className="page-body">
-                    <Outlet />
+                    <Outlet context={{ role } satisfies LayoutContext} />
                 </div>
             </div>
 
