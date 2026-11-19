@@ -10,23 +10,12 @@ jobs:
   ping-supabase:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      # A lógica fica no script para poder ser testada fora do GitHub.
+      # Ele limpa espaços/aspas dos segredos e explica o erro quando algo está errado.
       - name: Ping Supabase project
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: |
-          # Faz uma requisição simples via REST API do Supabase na tabela "products".
-          # limit=1 garante que a consulta seja rápida e barata.
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            "${SUPABASE_URL}/rest/v1/products?select=id&limit=1" \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
-
-          echo "Resposta do Supabase: HTTP $response"
-
-          if [ "$response" -ge 200 ] && [ "$response" -lt 300 ]; then
-            echo "✅ Supabase respondeu normalmente, projeto continua ativo."
-          else
-            echo "⚠️ Supabase retornou um status inesperado: $response"
-            exit 1
-          fi
+        run: bash .github/scripts/ping-supabase.sh
