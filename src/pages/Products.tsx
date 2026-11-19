@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Pencil, Trash2, Package, Download, Barcode, History, Upload, FileSpreadsheet, CheckCircle, AlertCircle } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Plus, Pencil, Trash2, Package, Download, Barcode, History, Upload, FileSpreadsheet, CheckCircle, AlertCircle, AlertTriangle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getAll, insert, updateById } from '../database/sql-wrapper';
@@ -34,6 +35,9 @@ function validateProduct(p: ProductForm): string[] {
 }
 
 export function Products() {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const filterLowStock = searchParams.get('filtro') === 'baixo';
+    const highlightedProductId = Number(searchParams.get('produto')) || null;
     const [categories, setCategories] = useState<Category[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [lowStockThreshold, setLowStockThreshold] = useState(10);
@@ -51,6 +55,8 @@ export function Products() {
     const importInputRef = useRef<HTMLInputElement>(null);
     const [focusQuantityOnOpen, setFocusQuantityOnOpen] = useState(false);
     const quantityInputRef = useRef<HTMLInputElement>(null);
+    const highlightedRowRef = useRef<HTMLTableRowElement>(null);
+    const lastScrolledProductIdRef = useRef<number | null>(null);
 
     const {
         items: products, modalOpen, setModalOpen, editing: editingProduct, form, setForm,
@@ -85,12 +91,51 @@ export function Products() {
 
     useEffect(() => { loadCategoriesAndSuppliers(); }, []);
 
+    const lowStockCount = products.filter((p) => isLowStock(p, lowStockThreshold)).length;
+
     const filtered = products.filter((p) => {
         const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
             p.sku.toLowerCase().includes(search.toLowerCase());
         const matchCat = filterCategory === 0 || p.categoryId === filterCategory;
-        return matchSearch && matchCat;
+        const matchLowStock = !filterLowStock || isLowStock(p, lowStockThreshold);
+        return matchSearch && matchCat && matchLowStock;
     });
+
+    const hasActiveFilters = Boolean(search) || filterCategory !== 0 || filterLowStock;
+
+    useEffect(() => {
+        if (!highlightedProductId) {
+            lastScrolledProductIdRef.current = null;
+            return;
+        }
+        if (lastScrolledProductIdRef.current === highlightedProductId) return;
+        if (highlightedRowRef.current) {
+            highlightedRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            lastScrolledProductIdRef.current = highlightedProductId;
+        }
+    }, [highlightedProductId, filtered]);
+
+    function toggleLowStockFilter() {
+        const next = new URLSearchParams(searchParams);
+        if (filterLowStock) {
+            next.delete('filtro');
+        } else {
+            next.set('filtro', 'baixo');
+        }
+        next.delete('produto');
+        setSearchParams(next, { replace: true });
+    }
+
+    function clearFilters() {
+        setSearch('');
+        setFilterCategory(0);
+        if (searchParams.has('filtro') || searchParams.has('produto')) {
+            const next = new URLSearchParams(searchParams);
+            next.delete('filtro');
+            next.delete('produto');
+            setSearchParams(next, { replace: true });
+        }
+    }
 
     function openNew() {
         openNewBase();
@@ -180,6 +225,7 @@ export function Products() {
             }
             setModalOpen(false);
             await loadData();
+            window.dispatchEvent(new Event('empacota:stock-changed'));
         } catch (err) {
             setSaveError(err instanceof Error ? translateDbError(err.message) : 'Erro ao salvar produto.');
         }
@@ -245,9 +291,15 @@ export function Products() {
                 await loadCategoriesAndSuppliers();
             }
             await loadData();
+            window.dispatchEvent(new Event('empacota:stock-changed'));
         } finally {
             setImporting(false);
         }
+    }
+
+    async function handleDeleteAndNotify() {
+        await handleDelete();
+        window.dispatchEvent(new Event('empacota:stock-changed'));
     }
 
     function getStockBadge(p: Product) {
@@ -269,10 +321,23 @@ export function Products() {
             <div className="toolbar">
                 <div className="toolbar-left">
                     <SearchBar value={search} onChange={setSearch} placeholder="Buscar por nome ou SKU..." />
-                    <select className="form-select" style={{ width: '180px' }} value={filterCategory} onChange={(e) => setFilterCategory(Number(e.target.value))}>
+                    <select className="form-select toolbar-select" value={filterCategory} onChange={(e) => setFilterCategory(Number(e.target.value))}>
                         <option value={0}>Todas categorias</option>
                         {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
+                    <button
+                        type="button"
+                        className={`btn ${filterLowStock ? 'btn-filter-warning' : 'btn-secondary'}`}
+                        onClick={toggleLowStockFilter}
+                        aria-pressed={filterLowStock}
+                        title="Filtrar produtos com estoque baixo ou zerado"
+                    >
+                        <AlertTriangle size={16} />
+                        Estoque baixo
+                        {lowStockCount > 0 && (
+                            <span className="badge badge-warning">{lowStockCount}</span>
+                        )}
+                    </button>
                 </div>
                 <div className="toolbar-right">
                     <button className="btn btn-secondary" onClick={handleExportPdf} title="Exportar PDF"><Download size={16} /> PDF</button>
@@ -296,7 +361,24 @@ export function Products() {
             )}
 
             {filtered.length === 0 ? (
-                <EmptyState icon={Package} title="Nenhum produto encontrado" description={search ? 'Tente outra busca.' : 'Adicione seu primeiro produto para começar.'} action={!search ? <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Produto</button> : undefined} />
+                <EmptyState
+                    icon={Package}
+                    title={filterLowStock && !search && filterCategory === 0 ? 'Nenhum produto com estoque baixo' : 'Nenhum produto encontrado'}
+                    description={
+                        filterLowStock && !search && filterCategory === 0
+                            ? 'Todos os produtos estão acima do estoque mínimo.'
+                            : hasActiveFilters
+                                ? 'Tente ajustar os filtros ou a busca.'
+                                : 'Adicione seu primeiro produto para começar.'
+                    }
+                    action={
+                        hasActiveFilters ? (
+                            <button className="btn btn-secondary" onClick={clearFilters}>Limpar filtros</button>
+                        ) : (
+                            <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Produto</button>
+                        )
+                    }
+                />
             ) : (
                 <div className="table-container">
                     <table className="table">
@@ -313,8 +395,15 @@ export function Products() {
                             </tr>
                         </thead>
                         <tbody>
-                            {filtered.map((p) => (
-                                <tr key={p.id} style={p.quantity === 0 ? { background: 'var(--danger-bg)' } : undefined}>
+                            {filtered.map((p) => {
+                                const isHighlighted = highlightedProductId !== null && p.id === highlightedProductId;
+                                return (
+                                    <tr
+                                        key={p.id}
+                                        ref={isHighlighted ? highlightedRowRef : undefined}
+                                        className={isHighlighted ? 'row-highlight' : undefined}
+                                        style={p.quantity === 0 && !isHighlighted ? { background: 'var(--danger-bg)' } : undefined}
+                                    >
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                             <div className="product-thumb"><Package size={16} /></div>
@@ -339,7 +428,8 @@ export function Products() {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -440,7 +530,7 @@ export function Products() {
             )}
 
             {deleteTarget && (
-                <ConfirmDialog title="Excluir Produto" message={`Tem certeza que deseja excluir "${deleteTarget.name}"? Esta ação não pode ser desfeita.`} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
+                <ConfirmDialog title="Excluir Produto" message={`Tem certeza que deseja excluir "${deleteTarget.name}"? Esta ação não pode ser desfeita.`} onConfirm={handleDeleteAndNotify} onCancel={() => setDeleteTarget(null)} />
             )}
 
             {barcodeProduct && (
