@@ -177,16 +177,19 @@ export function StockCount() {
                     type: 'warning',
                     message: result.reason || 'Esta contagem já foi aplicada anteriormente.',
                 });
-            } else if (result.adjusted > 0) {
-                setFeedback({
-                    type: 'success',
-                    message: `Contagem aplicada! ${result.adjusted} ${result.adjusted === 1 ? 'produto ajustado' : 'produtos ajustados'} no estoque.`,
-                });
             } else {
-                setFeedback({
-                    type: 'success',
-                    message: 'Contagem registrada! Todos os itens conferiram com o esperado, sem ajustes necessários.',
-                });
+                window.dispatchEvent(new Event('empacota:stock-changed'));
+                if (result.adjusted > 0) {
+                    setFeedback({
+                        type: 'success',
+                        message: `Contagem aplicada! ${result.adjusted} ${result.adjusted === 1 ? 'produto ajustado' : 'produtos ajustados'} no estoque.`,
+                    });
+                } else {
+                    setFeedback({
+                        type: 'success',
+                        message: 'Contagem registrada! Todos os itens conferiram com o esperado, sem ajustes necessários.',
+                    });
+                }
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Erro desconhecido ao aplicar a contagem.';

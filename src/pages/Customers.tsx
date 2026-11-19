@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Plus, Pencil, Trash2, Users, Phone, DollarSign, Wallet, FileText, CheckCircle,
 } from 'lucide-react';
@@ -38,6 +38,7 @@ export function Customers() {
     const [entries, setEntries] = useState<CustomerEntry[]>([]);
     const [loadingEntries, setLoadingEntries] = useState(false);
     const [entriesError, setEntriesError] = useState<string | null>(null);
+    const activeCustomerIdRef = useRef<number | null>(null);
 
     const [paymentOpen, setPaymentOpen] = useState(false);
     const [paymentAmount, setPaymentAmount] = useState('');
@@ -99,15 +100,20 @@ export function Customers() {
         setEntriesError(null);
         try {
             const list = await getCustomerEntries(customerId);
+            if (activeCustomerIdRef.current !== customerId) return;
             setEntries(list);
         } catch (err) {
+            if (activeCustomerIdRef.current !== customerId) return;
             setEntriesError(err instanceof Error ? translateDbError(err.message) : 'Erro ao carregar histórico.');
         } finally {
-            setLoadingEntries(false);
+            if (activeCustomerIdRef.current === customerId) {
+                setLoadingEntries(false);
+            }
         }
     }, []);
 
     function openDetail(customer: Customer) {
+        activeCustomerIdRef.current = customer.id ?? null;
         setDetailCustomer(customer);
         setEntries([]);
         setEntriesError(null);
@@ -118,11 +124,15 @@ export function Customers() {
         setPaymentSuccess(null);
         if (customer.id !== undefined) {
             loadEntries(customer.id);
+        } else {
+            setLoadingEntries(false);
         }
     }
 
     function closeDetail() {
+        activeCustomerIdRef.current = null;
         setDetailCustomer(null);
+        setLoadingEntries(false);
         setPaymentOpen(false);
         setPaymentError(null);
         setPaymentSuccess(null);

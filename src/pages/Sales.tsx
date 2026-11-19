@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import {
-    ShoppingCart, Search, Plus, Minus, Trash2, CheckCircle, X, Printer, DollarSign, Package, History, Eye,
+    ShoppingCart, Search, Plus, Minus, Trash2, CheckCircle, X, Printer, DollarSign, Package, History, Eye, User, UserPlus,
 } from 'lucide-react';
 import { getAll, getById, findWhere, insert, updateById } from '../database/sql-wrapper';
 import type { Product, Location, ProductStock, Movement, Settings } from '../database/types';
+import { getCustomerBalances, registerFiado, type CustomerBalance } from '../utils/customerBalance';
+import { formatPhoneBR } from '../utils/phone';
 import { translateDbError } from '../utils/dbErrors';
 import { Receipt, type ReceiptData, type ReceiptItem } from '../components/Receipt';
 import { Modal } from '../components/Modal';
@@ -132,6 +134,8 @@ export function Sales() {
     const [locations, setLocations] = useState<Location[]>([]);
     const [movements, setMovements] = useState<Movement[]>([]);
     const [companySettings, setCompanySettings] = useState<Settings | null>(null);
+    const [customerBalances, setCustomerBalances] = useState<CustomerBalance[]>([]);
+    const [customersLoadError, setCustomersLoadError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'pos' | 'history'>('pos');
     const [search, setSearch] = useState('');
     const [historySearch, setHistorySearch] = useState('');
@@ -139,10 +143,17 @@ export function Sales() {
     const [selectedLocation, setSelectedLocation] = useState<number | null>(null);
     const [showSuccess, setShowSuccess] = useState(false);
     const [lastSaleTotal, setLastSaleTotal] = useState(0);
+    const [lastSaleFiado, setLastSaleFiado] = useState<{ customerName: string; balance: number } | null>(null);
     const [activeReceipt, setActiveReceipt] = useState<ReceiptData | null>(null);
     const [previewReceipt, setPreviewReceipt] = useState<ReceiptData | null>(null);
     const [paymentMethod, setPaymentMethod] = useState<string>('Dinheiro');
     const [amountPaid, setAmountPaid] = useState('');
+    const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+    const [customerSearch, setCustomerSearch] = useState('');
+    const [newCustomerModalOpen, setNewCustomerModalOpen] = useState(false);
+    const [newCustomerForm, setNewCustomerForm] = useState({ name: '', phone: '', notes: '' });
+    const [newCustomerError, setNewCustomerError] = useState<string | null>(null);
+    const [savingCustomer, setSavingCustomer] = useState(false);
     const [saleError, setSaleError] = useState<string | null>(null);
     const [finalizing, setFinalizing] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
@@ -152,16 +163,34 @@ export function Sales() {
     }, []);
 
     async function loadData() {
-        const [prods, locs, movs, settingsList] = await Promise.all([
+        const [prods, locs, movs, settingsList, balancesResult] = await Promise.all([
             getAll<Product>('products'),
             getAll<Location>('locations'),
             getAll<Movement>('movements'),
             getAll<Settings>('settings'),
+            getCustomerBalances()
+                .then((data) => ({ ok: true as const, data }))
+                .catch((err: unknown) => ({ ok: false as const, err })),
         ]);
         setProducts(prods);
         setLocations(locs);
         setMovements(movs);
         setCompanySettings(settingsList[0] ?? null);
+
+        if (balancesResult.ok) {
+            setCustomerBalances(
+                [...balancesResult.data].sort((a, b) => a.customer.name.localeCompare(b.customer.name, 'pt-BR'))
+            );
+            setCustomersLoadError(null);
+        } else {
+            console.error('Erro ao carregar clientes:', balancesResult.err);
+            setCustomerBalances([]);
+            setCustomersLoadError(
+                balancesResult.err instanceof Error
+                    ? translateDbError(balancesResult.err.message)
+                    : 'Não foi possível carregar a lista de clientes.'
+            );
+        }
     }
 
     const salesHistory = useMemo(
@@ -187,6 +216,7 @@ export function Sales() {
         : [];
 
     function addToCart(product: Product) {
+        setSaleError(null);
         setCart((prev) => {
             const existing = prev.find((i) => i.product.id === product.id && i.discount === 0);
             if (existing) {
@@ -236,6 +266,59 @@ export function Sales() {
     const paidNum = parseFloat(amountPaid) || 0;
     const change = paidNum - cartTotal;
 
+    const selectedCustomerEntry = selectedCustomerId !== null
+        ? customerBalances.find((c) => c.customer.id === selectedCustomerId) ?? null
+        : null;
+
+    const customerSearchLower = customerSearch.trim().toLowerCase();
+    const customerSearchDigits = customerSearch.replace(/\D/g, '');
+    const filteredCustomers = customerBalances.filter(({ customer }) => {
+        if (!customerSearchLower) return true;
+        const matchesName = customer.name.toLowerCase().includes(customerSearchLower);
+        const matchesPhone = (customer.phone ?? '').toLowerCase().includes(customerSearchLower);
+        const matchesDigits = customerSearchDigits.length > 0
+            && (customer.phone ?? '').replace(/\D/g, '').includes(customerSearchDigits);
+        return matchesName || matchesPhone || matchesDigits;
+    });
+
+    function openNewCustomerModal() {
+        const trimmed = customerSearch.trim();
+        const initialName = /\d/.test(trimmed) ? '' : trimmed;
+        setNewCustomerForm({ name: initialName, phone: '', notes: '' });
+        setNewCustomerError(null);
+        setNewCustomerModalOpen(true);
+    }
+
+    async function handleCreateCustomer() {
+        if (!newCustomerForm.name.trim()) {
+            setNewCustomerError('Nome é obrigatório.');
+            return;
+        }
+        setSavingCustomer(true);
+        setNewCustomerError(null);
+        try {
+            const newId = await insert('customers', {
+                name: newCustomerForm.name.trim(),
+                phone: newCustomerForm.phone.trim(),
+                notes: newCustomerForm.notes.trim(),
+                createdAt: new Date(),
+            });
+            const updatedBalances = await getCustomerBalances();
+            setCustomerBalances(
+                [...updatedBalances].sort((a, b) => a.customer.name.localeCompare(b.customer.name, 'pt-BR'))
+            );
+            setCustomersLoadError(null);
+            setSelectedCustomerId(newId);
+            setCustomerSearch('');
+            setSaleError(null);
+            setNewCustomerModalOpen(false);
+        } catch (err) {
+            setNewCustomerError(err instanceof Error ? translateDbError(err.message) : 'Erro ao cadastrar cliente.');
+        } finally {
+            setSavingCustomer(false);
+        }
+    }
+
     function toReceiptData(sale: StoredSale): ReceiptData {
         return {
             saleId: sale.saleId,
@@ -254,6 +337,17 @@ export function Sales() {
 
     async function finalizeSale() {
         if (cart.length === 0) return;
+
+        if (paymentMethod === 'Fiado') {
+            if (selectedCustomerId === null) {
+                setSaleError('Selecione o cliente para vender fiado.');
+                return;
+            }
+            if (Math.round(cartTotal * 100) <= 0) {
+                setSaleError('O valor da venda fiado deve ser maior que zero.');
+                return;
+            }
+        }
 
         setSaleError(null);
         setFinalizing(true);
@@ -342,6 +436,37 @@ export function Sales() {
                 }
             }
 
+            window.dispatchEvent(new Event('empacota:stock-changed'));
+
+            const saleTotal = Math.round(cartTotal * 100) / 100;
+            let fiadoInfo: { customerName: string; balance: number } | null = null;
+            if (paymentMethod === 'Fiado') {
+                const itemsSummary = cart.map((i) => `${i.quantity}x ${i.product.name}`).join(', ');
+                const resumo = `Venda #${saleId}: ${itemsSummary}`;
+                try {
+                    const entryResult = await registerFiado(selectedCustomerId, saleTotal, resumo);
+                    fiadoInfo = {
+                        customerName: selectedCustomerEntry?.customer.name ?? 'Cliente',
+                        balance: entryResult.balance,
+                    };
+                } catch (fiadoErr) {
+                    console.error('Erro ao lançar fiado após baixa de estoque:', fiadoErr);
+                    // Limpa o carrinho e fecha o fluxo de pagamento para impedir clique
+                    // repetido que baixaria o estoque em dobro.
+                    setCart([]);
+                    setAmountPaid('');
+                    setSearch('');
+                    setSelectedCustomerId(null);
+                    setCustomerSearch('');
+                    setPaymentMethod('Dinheiro');
+                    setSaleError(
+                        'A venda foi registrada e o estoque baixou, mas o lançamento do fiado falhou. Lance o valor manualmente em Clientes antes de continuar.'
+                    );
+                    await loadData().catch(() => {});
+                    return;
+                }
+            }
+
             const receiptSnapshot: ReceiptData = {
                 saleId,
                 companyName: companySettings?.companyName,
@@ -356,18 +481,21 @@ export function Sales() {
                 })),
                 subtotal: cartOriginalTotal,
                 discount: totalDiscount,
-                total: cartTotal,
+                total: saleTotal,
                 paymentMethod,
                 amountPaid: paymentMethod === 'Dinheiro' && paidNum > 0 ? paidNum : undefined,
                 change: paymentMethod === 'Dinheiro' && paidNum > 0 ? Math.max(0, change) : undefined,
             };
 
             setActiveReceipt(receiptSnapshot);
-            setLastSaleTotal(cartTotal);
+            setLastSaleTotal(saleTotal);
+            setLastSaleFiado(fiadoInfo);
             setShowSuccess(true);
             setCart([]);
             setAmountPaid('');
             setSearch('');
+            setSelectedCustomerId(null);
+            setCustomerSearch('');
             await loadData();
         } catch (err) {
             console.error('Erro ao finalizar venda:', err);
@@ -383,6 +511,9 @@ export function Sales() {
     function handleNewSale() {
         setShowSuccess(false);
         setPaymentMethod('Dinheiro');
+        setSelectedCustomerId(null);
+        setCustomerSearch('');
+        setLastSaleFiado(null);
         setSaleError(null);
         searchRef.current?.focus();
     }
@@ -599,6 +730,33 @@ export function Sales() {
                                 </select>
                             </div>
 
+                            {saleError && (
+                                <div style={{
+                                    margin: '10px 20px 0',
+                                    padding: '10px 12px',
+                                    borderRadius: 'var(--border-radius-sm)',
+                                    background: 'var(--danger-bg)',
+                                    color: 'var(--danger)',
+                                    fontSize: '13px',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    justifyContent: 'space-between',
+                                    gap: '8px',
+                                    flexShrink: 0,
+                                }}>
+                                    <span>⚠️ {saleError}</span>
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={() => setSaleError(null)}
+                                        aria-label="Fechar aviso"
+                                        style={{ padding: '2px', color: 'var(--danger)', flexShrink: 0 }}
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            )}
+
                             {/* Cart Items */}
                             <div style={{ flex: 1, overflow: 'auto' }}>
                                 {cart.length === 0 ? (
@@ -671,7 +829,7 @@ export function Sales() {
 
                             {/* Payment section */}
                             {cart.length > 0 && (
-                                <div style={{ borderTop: '2px solid var(--accent)', padding: '16px 20px' }}>
+                                <div className="sales-payment-section">
                                     {totalDiscount > 0 && (
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '12.5px' }}>
                                             <span className="text-muted">Subtotal:</span>
@@ -692,13 +850,16 @@ export function Sales() {
                                     {/* Payment method */}
                                     <div style={{ marginBottom: '10px' }}>
                                         <label style={{ fontSize: '11px', marginBottom: '4px', display: 'block' }} className="text-muted">Forma de Pagamento</label>
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            {['Dinheiro', 'Cartão', 'PIX'].map((m) => (
+                                        <div className="sales-payment-methods">
+                                            {['Dinheiro', 'Cartão', 'PIX', 'Fiado'].map((m) => (
                                                 <button
                                                     key={m}
                                                     className={`btn btn-sm ${paymentMethod === m ? 'btn-primary' : 'btn-ghost'}`}
-                                                    onClick={() => setPaymentMethod(m)}
-                                                    style={{ flex: 1, fontSize: '12px' }}
+                                                    onClick={() => {
+                                                        setPaymentMethod(m);
+                                                        setSaleError(null);
+                                                    }}
+                                                    style={{ fontSize: '12px', padding: '6px 8px' }}
                                                 >
                                                     {m}
                                                 </button>
@@ -729,10 +890,109 @@ export function Sales() {
                                         </div>
                                     )}
 
-                                    {saleError && (
-                                        <p style={{ color: 'var(--danger)', fontSize: '13px', marginBottom: '10px' }}>
-                                            ⚠️ {saleError}
-                                        </p>
+                                    {/* Fiado: seletor de cliente com busca e cadastro rápido */}
+                                    {paymentMethod === 'Fiado' && (
+                                        <div style={{ marginBottom: '12px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                                <label style={{ fontSize: '11px' }} className="text-muted">Cliente *</label>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-ghost btn-sm"
+                                                    onClick={openNewCustomerModal}
+                                                    style={{ fontSize: '11.5px', padding: '2px 8px', color: 'var(--accent)' }}
+                                                >
+                                                    <UserPlus size={13} /> Novo cliente
+                                                </button>
+                                            </div>
+
+                                            {customersLoadError && (
+                                                <p style={{ fontSize: '11.5px', color: 'var(--warning)', marginBottom: '6px' }}>
+                                                    Não foi possível carregar clientes ({customersLoadError}).
+                                                </p>
+                                            )}
+
+                                            {selectedCustomerEntry ? (
+                                                <div style={{
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
+                                                    padding: '10px 12px', background: 'var(--accent-light)',
+                                                    border: '1px solid var(--accent)', borderRadius: 'var(--border-radius-sm)',
+                                                }}>
+                                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                                        <div style={{ fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }} className="truncate">
+                                                            <User size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                                                            <span className="truncate">{selectedCustomerEntry.customer.name}</span>
+                                                        </div>
+                                                        <div style={{ fontSize: '11px', marginTop: '2px' }} className="text-muted">
+                                                            {selectedCustomerEntry.customer.phone ? `${selectedCustomerEntry.customer.phone} • ` : ''}
+                                                            Saldo atual: <strong className="tabular-nums">{fmt(selectedCustomerEntry.balance)}</strong>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-ghost btn-sm"
+                                                        onClick={() => setSelectedCustomerId(null)}
+                                                        title="Trocar cliente"
+                                                        style={{ padding: '4px 6px' }}
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <div className="search-bar" style={{ maxWidth: 'none' }}>
+                                                        <Search size={14} />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Buscar cliente por nome ou telefone..."
+                                                            value={customerSearch}
+                                                            onChange={(e) => setCustomerSearch(e.target.value)}
+                                                            style={{ fontSize: '12.5px', padding: '7px 10px 7px 32px' }}
+                                                        />
+                                                    </div>
+                                                    <div style={{
+                                                        maxHeight: '140px', overflowY: 'auto',
+                                                        border: '1px solid var(--border)', borderRadius: 'var(--border-radius-sm)',
+                                                        background: 'var(--bg-input)',
+                                                    }}>
+                                                        {filteredCustomers.length === 0 ? (
+                                                            <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px' }} className="text-muted">
+                                                                {customerBalances.length === 0
+                                                                    ? 'Nenhum cliente cadastrado.'
+                                                                    : 'Nenhum cliente encontrado.'}
+                                                            </div>
+                                                        ) : (
+                                                            filteredCustomers.map(({ customer, balance }) => (
+                                                                <button
+                                                                    key={customer.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setSelectedCustomerId(customer.id!);
+                                                                        setSaleError(null);
+                                                                    }}
+                                                                    style={{
+                                                                        width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                                        gap: '8px', padding: '8px 10px', border: 'none', borderBottom: '1px solid var(--border)',
+                                                                        background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left',
+                                                                    }}
+                                                                >
+                                                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                                                        <div style={{ fontSize: '12.5px', fontWeight: 500 }} className="truncate">{customer.name}</div>
+                                                                        {customer.phone && (
+                                                                            <div style={{ fontSize: '11px' }} className="text-muted tabular-nums">{customer.phone}</div>
+                                                                        )}
+                                                                    </div>
+                                                                    {balance > 0 && (
+                                                                        <span className="badge badge-warning tabular-nums" style={{ fontSize: '10.5px' }}>
+                                                                            {fmt(balance)}
+                                                                        </span>
+                                                                    )}
+                                                                </button>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
 
                                     <button
@@ -885,6 +1145,12 @@ export function Sales() {
                                 <p style={{ fontSize: '13px', marginBottom: '16px' }} className="text-muted">
                                     O estoque foi atualizado automaticamente.
                                 </p>
+                                {lastSaleFiado && (
+                                    <p style={{ fontSize: '13px', marginBottom: '12px', color: 'var(--warning)' }}>
+                                        Fiado registrado para <strong>{lastSaleFiado.customerName}</strong> — Saldo atualizado:{' '}
+                                        <strong className="tabular-nums">{fmt(lastSaleFiado.balance)}</strong>
+                                    </p>
+                                )}
                                 <div style={{
                                     fontSize: '28px', fontWeight: 800, color: 'var(--accent)',
                                     padding: '12px', background: 'var(--bg-secondary)', borderRadius: 'var(--border-radius)',
@@ -907,6 +1173,69 @@ export function Sales() {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* Modal de cadastro rápido de cliente */}
+                {newCustomerModalOpen && (
+                    <Modal
+                        title="Novo Cliente"
+                        onClose={() => setNewCustomerModalOpen(false)}
+                        footer={
+                            <>
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => setNewCustomerModalOpen(false)}
+                                    disabled={savingCustomer}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleCreateCustomer}
+                                    disabled={savingCustomer}
+                                >
+                                    {savingCustomer ? 'Salvando...' : 'Salvar'}
+                                </button>
+                            </>
+                        }
+                    >
+                        <div className="form-group">
+                            <label className="form-label">Nome *</label>
+                            <input
+                                className="form-input"
+                                value={newCustomerForm.name}
+                                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, name: e.target.value })}
+                                placeholder="Nome completo do cliente"
+                                autoFocus
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Telefone</label>
+                            <input
+                                className="form-input"
+                                value={newCustomerForm.phone}
+                                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, phone: formatPhoneBR(e.target.value) })}
+                                placeholder="(11) 99999-9999"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Observações</label>
+                            <textarea
+                                className="form-textarea"
+                                value={newCustomerForm.notes}
+                                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, notes: e.target.value })}
+                                placeholder="Endereço, apelido ou observações"
+                            />
+                        </div>
+                        {newCustomerError && (
+                            <div style={{
+                                background: 'var(--danger-bg)', color: 'var(--danger)',
+                                padding: '10px 12px', borderRadius: '8px', fontSize: '13px',
+                            }}>
+                                ⚠️ {newCustomerError}
+                            </div>
+                        )}
+                    </Modal>
                 )}
 
                 {/* Receipt Preview Modal */}
