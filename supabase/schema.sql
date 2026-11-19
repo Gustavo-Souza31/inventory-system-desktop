@@ -840,7 +840,8 @@ BEGIN
     IF v_role = 'caixa' AND p_type <> 'fiado' THEN
         RAISE EXCEPTION 'O caixa não pode registrar pagamento de dívida';
     END IF;
-    IF v_amount IS NULL OR v_amount <= 0 THEN
+    -- 'NaN' é um numeric válido e passa em "<= 0" (NaN é maior que tudo no Postgres).
+    IF v_amount IS NULL OR v_amount = 'NaN'::numeric OR v_amount <= 0 THEN
         RAISE EXCEPTION 'O valor deve ser maior que zero';
     END IF;
 
@@ -898,6 +899,66 @@ CREATE POLICY "consents_insert" ON "consents"
         user_id = auth.uid()
         AND "acceptedAt" BETWEEN now() - interval '1 minute' AND now() + interval '1 minute'
     );
+
+-- ============================================================================
+-- Referências entre tabelas antigas só podem apontar para a MESMA loja
+--
+-- As chaves estrangeiras do Postgres ignoram a RLS: sem esta checagem, uma loja
+-- poderia apontar um produto seu para a categoria (ou o local) de outra, o que
+-- travaria a exclusão dessa categoria e a restauração de backup da outra loja.
+-- Mesmo padrão dos triggers de contagem e fiado.
+-- ============================================================================
+CREATE OR REPLACE FUNCTION public.check_store_refs_owner()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+    IF TG_TABLE_NAME = 'products' THEN
+        IF NEW."categoryId" IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM public.categories WHERE id = NEW."categoryId" AND user_id = NEW.user_id) THEN
+            RAISE EXCEPTION 'Categoria % não encontrada', NEW."categoryId";
+        END IF;
+        IF NEW."supplierId" IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM public.suppliers WHERE id = NEW."supplierId" AND user_id = NEW.user_id) THEN
+            RAISE EXCEPTION 'Fornecedor % não encontrado', NEW."supplierId";
+        END IF;
+    ELSE
+        -- productStock, movements e priceHistory apontam para um produto...
+        IF NOT EXISTS (
+            SELECT 1 FROM public.products WHERE id = NEW."productId" AND user_id = NEW.user_id) THEN
+            RAISE EXCEPTION 'Produto % não encontrado', NEW."productId";
+        END IF;
+        -- ...e, exceto o histórico de preços, também para um local (opcional em movements).
+        -- IF aninhado de propósito: priceHistory não tem a coluna locationId, e o
+        -- Postgres não garante a ordem de avaliação de um AND.
+        IF TG_TABLE_NAME <> 'priceHistory' THEN
+            IF NEW."locationId" IS NOT NULL AND NOT EXISTS (
+                SELECT 1 FROM public.locations WHERE id = NEW."locationId" AND user_id = NEW.user_id) THEN
+                RAISE EXCEPTION 'Local % não encontrado', NEW."locationId";
+            END IF;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS "products_check_refs_owner" ON "products";
+CREATE TRIGGER "products_check_refs_owner"
+    BEFORE INSERT OR UPDATE ON "products"
+    FOR EACH ROW EXECUTE FUNCTION public.check_store_refs_owner();
+DROP TRIGGER IF EXISTS "productStock_check_refs_owner" ON "productStock";
+CREATE TRIGGER "productStock_check_refs_owner"
+    BEFORE INSERT OR UPDATE ON "productStock"
+    FOR EACH ROW EXECUTE FUNCTION public.check_store_refs_owner();
+DROP TRIGGER IF EXISTS "movements_check_refs_owner" ON "movements";
+CREATE TRIGGER "movements_check_refs_owner"
+    BEFORE INSERT OR UPDATE ON "movements"
+    FOR EACH ROW EXECUTE FUNCTION public.check_store_refs_owner();
+DROP TRIGGER IF EXISTS "priceHistory_check_refs_owner" ON "priceHistory";
+CREATE TRIGGER "priceHistory_check_refs_owner"
+    BEFORE INSERT OR UPDATE ON "priceHistory"
+    FOR EACH ROW EXECUTE FUNCTION public.check_store_refs_owner();
 
 -- ============================================================================
 -- Perfis de usuário (dono / gerente / caixa) — tarefa 009
@@ -1207,7 +1268,7 @@ DECLARE
         "categories":       {"cs": true,  "ci": false, "cu": false, "gw": true},
         "suppliers":        {"cs": false, "ci": false, "cu": false, "gw": true},
         "locations":        {"cs": true,  "ci": false, "cu": false, "gw": true},
-        "productStock":     {"cs": true,  "ci": true,  "cu": true,  "gw": true},
+        "productStock":     {"cs": true,  "ci": false, "cu": true,  "gw": true},
         "products":         {"cs": true,  "ci": false, "cu": true,  "gw": true},
         "movements":        {"cs": true,  "ci": true,  "cu": false, "gw": true},
         "priceHistory":     {"cs": false, "ci": false, "cu": false, "gw": true},

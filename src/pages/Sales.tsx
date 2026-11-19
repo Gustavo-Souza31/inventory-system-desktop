@@ -460,7 +460,7 @@ export function Sales() {
                     setCustomerSearch('');
                     setPaymentMethod('Dinheiro');
                     setSaleError(
-                        'A venda foi registrada e o estoque baixou, mas o lançamento do fiado falhou. Lance o valor manualmente em Clientes antes de continuar.'
+                        'A venda foi registrada e o estoque baixou, mas o lançamento do fiado falhou. Lance o valor manualmente em Clientes (se você é caixa, avise o gerente ou o dono para lançar) antes de continuar.'
                     );
                     await loadData().catch(() => {});
                     return;
