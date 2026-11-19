@@ -11,6 +11,7 @@ import {
     BoxesIcon,
     MapPin,
     ShoppingCart,
+    Users,
     Menu,
     X,
     LogOut,
@@ -26,6 +27,7 @@ import type { Settings as SettingsType } from '../database/types';
 const navItems = [
     { label: 'Painel', path: '/', icon: LayoutDashboard },
     { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
+    { label: 'Clientes', path: '/clientes', icon: Users },
     { label: 'Produtos', path: '/produtos', icon: Package },
     { label: 'Categorias', path: '/categorias', icon: Tags },
     { label: 'Fornecedores', path: '/fornecedores', icon: Truck },
@@ -38,6 +40,7 @@ const navItems = [
 const pageTitles: Record<string, string> = {
     '/': 'Painel de Controle',
     '/vendas': 'Ponto de Venda',
+    '/clientes': 'Clientes',
     '/produtos': 'Produtos',
     '/categorias': 'Categorias',
     '/fornecedores': 'Fornecedores',
