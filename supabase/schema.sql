@@ -179,6 +179,14 @@ BEGIN
         NEW.raw_user_meta_data->>'full_name',
         NEW.raw_user_meta_data->>'phone'
     );
+
+    -- Aceite dos termos e da política de privacidade (tarefa 003): a versão
+    -- aceita vem junto do cadastro (a sessão ainda não existe até confirmar o
+    -- e-mail, então o client não conseguiria gravar direto na tabela).
+    IF NEW.raw_user_meta_data->>'accepted_terms_version' IS NOT NULL THEN
+        INSERT INTO public.consents ("user_id", "termsVersion")
+        VALUES (NEW.id, NEW.raw_user_meta_data->>'accepted_terms_version');
+    END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
@@ -509,3 +517,26 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.restore_backup(jsonb) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.restore_backup(jsonb) FROM anon;
 GRANT EXECUTE ON FUNCTION public.restore_backup(jsonb) TO authenticated;
+
+-- ============================================================================
+-- Aceite dos termos e da política de privacidade (LGPD) — tarefa 003
+--
+-- Uma linha por aceite: quem aceitou, qual versão dos textos e quando. A linha
+-- do cadastro é criada pelo trigger handle_new_user() (acima). A pessoa pode
+-- ler os próprios aceites e registrar um novo (quando os textos mudarem), mas
+-- não alterar nem apagar o histórico.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS "consents" (
+    "id" BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "user_id" UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+    "termsVersion" VARCHAR(50) NOT NULL,
+    "acceptedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE "consents" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "consents_select" ON "consents";
+CREATE POLICY "consents_select" ON "consents"
+    FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "consents_insert" ON "consents";
+CREATE POLICY "consents_insert" ON "consents"
+    FOR INSERT WITH CHECK (user_id = auth.uid());
