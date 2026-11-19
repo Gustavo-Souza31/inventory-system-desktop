@@ -1,6 +1,6 @@
 # 001 — Infraestrutura de testes de ponta a ponta (Playwright)
 
-- **Status:** aberta
+- **Status:** em revisão
 - **Agente:** DeepSeek
 - **Branch:** `deepseek/infra-testes-e2e`
 - **Depende de:** —
@@ -90,13 +90,37 @@ telas principais carregam. Com isso, toda mudança futura pode ser validada de p
 
 ## Relatório
 
-_(preenchido pelo agente)_
-
-- Agente:
-- Branch:
+- Agente: DeepSeek
+- Branch: `deepseek/infra-testes-e2e`
 - O que foi feito:
-- Arquivos alterados:
+  - Instalado `@playwright/test` como devDependency e apenas o Chromium (`npx playwright install chromium`).
+  - Scripts `test:e2e` e `test:e2e:ui` adicionados ao `package.json`.
+  - `playwright.config.ts` com `testDir: 'e2e'`, projeto único `chromium`, `webServer` (`npm run dev`,
+    `http://localhost:5173`, `reuseExistingServer: true`), `trace: 'retain-on-failure'` e
+    `screenshot: 'only-on-failure'`. O `.env` é carregado com `process.loadEnvFile` dentro de
+    try/catch, sem dependência nova.
+  - `e2e/helpers.ts` com `login(page)` (preenche e-mail/senha e espera `.sidebar`).
+  - `e2e/login.spec.ts` (sem credenciais) e `e2e/navegacao.spec.ts` (com credenciais, percorre os
+    9 itens do menu conferindo a rota e falha se houver `pageerror` ou `console` do tipo `error`;
+    sem `E2E_EMAIL`/`E2E_PASSWORD` o arquivo inteiro faz skip com a mensagem pedida).
+  - `e2e/README.md` curto e as três entradas novas no `.gitignore`.
+- Arquivos alterados: `package.json` (devDependency + 2 scripts), `package-lock.json`, `.gitignore`,
+  `tasks/001-infra-testes-e2e.md`, `tasks/README.md` (status no índice).
+- Arquivos criados: `playwright.config.ts`, `e2e/helpers.ts`, `e2e/login.spec.ts`,
+  `e2e/navegacao.spec.ts`, `e2e/README.md`.
 - Como testar:
-- `npm run build`:
-- `npm run test:e2e` (sem / com credenciais):
+  1. `npx playwright install chromium` (uma vez por máquina).
+  2. `npm run test:e2e` — `login.spec` passa e `navegacao.spec` fica *skipped*.
+  3. Definir `E2E_EMAIL` e `E2E_PASSWORD` no `.env` (conta de teste!) e rodar `npm run test:e2e`
+     de novo — os 2 testes passam.
+- `npm run build`: passou (`tsc` + `vite build`, só o aviso já existente de chunk > 500 kB).
+- `npm run test:e2e` (sem / com credenciais): sem credenciais: 1 passed, 1 skipped.
+  Com credenciais: **não executado** — esta máquina não tem `E2E_EMAIL`/`E2E_PASSWORD` e não há
+  conta de teste disponível. Precisa ser confirmado por quem tiver a conta.
 - Observações / dúvidas:
+  - A worktree não tinha `.env`; copiei o `.env` do repositório principal só para conseguir rodar o
+    app (é gitignored e não entrou no diff). Ele não tem variáveis `E2E_*`.
+  - O `tsc` não inclui `e2e/` (tsconfig só tem `"include": ["src"]`), então os testes não entram no
+    build — nenhum ajuste de tsconfig foi necessário.
+  - `navegacao.spec` considera qualquer `console.error` como falha. Se alguma biblioteca passar a
+    logar erro esperado (ex.: imagem 404), o teste vai acusar.
