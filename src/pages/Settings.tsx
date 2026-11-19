@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, Download, Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { Save, Download, Upload, CheckCircle, AlertCircle, LifeBuoy, MessageCircle, Mail } from 'lucide-react';
+import { version as appVersion } from '../../package.json';
 import { getAll, insert, updateById, clearTable } from '../database/sql-wrapper';
 import type { Settings as SettingsType } from '../database/types';
 import { exportDatabase, importDatabase } from '../utils/backup';
+import { SUPPORT_EMAIL, getWhatsAppSupportUrl, getMailtoSupportUrl } from '../config/support';
 
 // Todas as tabelas do banco (electron/database.ts), usado só pelo botão
 // "Limpar Todos os Dados" abaixo.
@@ -141,6 +143,37 @@ export function Settings() {
                 <Save size={16} />
                 {saved ? '✓ Salvo com sucesso!' : 'Salvar Configurações'}
             </button>
+
+            <div className="card" style={{ marginTop: '20px' }}>
+                <div className="section-title" style={{ marginBottom: '12px' }}>
+                    <LifeBuoy size={16} /> Ajuda e suporte
+                </div>
+                <p style={{ fontSize: '13px', marginBottom: '16px' }} className="text-muted">
+                    Precisa de ajuda com o Empacota? Fale com nossa equipe pelo WhatsApp ou por e-mail.
+                </p>
+                <div className="support-actions">
+                    <a
+                        className="btn btn-secondary"
+                        href={getWhatsAppSupportUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        <MessageCircle size={16} />
+                        Falar no WhatsApp
+                    </a>
+                    <a
+                        className="btn btn-secondary"
+                        href={getMailtoSupportUrl()}
+                    >
+                        <Mail size={16} />
+                        {SUPPORT_EMAIL}
+                    </a>
+                </div>
+                <div className="support-version">
+                    <span>Versão do app</span>
+                    <span className="font-mono">v{appVersion}</span>
+                </div>
+            </div>
         </div>
     );
 }

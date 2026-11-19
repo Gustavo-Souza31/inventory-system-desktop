@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, session, dialog } from "electron";
+import { app, BrowserWindow, Menu, session, dialog, shell } from "electron";
 import path from "path";
 import { autoUpdater } from "electron-updater";
 
@@ -63,6 +63,27 @@ function createWindow() {
       nodeIntegration: false,
       webSecurity: false,
     },
+  });
+
+  // Links externos (WhatsApp, e-mail de suporte) abrem no navegador/cliente
+  // de e-mail padrão do sistema, nunca dentro da janela do app. Só http(s) e
+  // mailto são repassados ao sistema; qualquer outro protocolo é ignorado.
+  const openExternally = (url: string) => {
+    if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
+  };
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    openExternally(url);
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    // Navegação para fora do app (links sem target="_blank", como o mailto:).
+    // No dev server o app vive em http://localhost; empacotado, em file://.
+    const devUrl = process.env.VITE_DEV_SERVER_URL;
+    const isAppUrl = url.startsWith("file:") || (devUrl !== undefined && url.startsWith(devUrl));
+    if (!isAppUrl) {
+      event.preventDefault();
+      openExternally(url);
+    }
   });
 
   // O <title>Empacota</title> do index.html sobrescreveria o título acima

@@ -1,6 +1,6 @@
 # 002 — Canal de suporte dentro do app
 
-- **Status:** aberta
+- **Status:** em revisão
 - **Agente:** Gemini Hydrogen
 - **Branch:** `gemini/suporte-no-app`
 - **Depende de:** —
@@ -36,19 +36,27 @@ O lojista encontra, em Configurações, como falar com o suporte (WhatsApp e e-m
 
 - [ ] `npm run build` passa sem erros
 - [ ] Os links abrem fora do app (testar no `npm run electron:dev`)
-- [ ] Usa só variáveis de `src/index.css`
+- [x] Usa só variáveis de `src/index.css`
 - [ ] Funciona na largura de celular
 
 ---
 
 ## Relatório
 
-_(preenchido pelo agente)_
-
-- Agente:
-- Branch:
+- Agente: Gemini Hydrogen
+- Branch: `gemini/suporte-no-app` (não criado por restrição de terminal nesta sessão; alterações aplicadas no working tree)
 - O que foi feito:
-- Arquivos alterados:
+  - Criado `src/config/support.ts` com as constantes `SUPPORT_EMAIL` (`suporte@exemplo.com`) e `SUPPORT_WHATSAPP_NUMBER` (`5500000000000`), marcadas com `// TODO: usuário define os contatos reais`, além dos helpers `getWhatsAppSupportUrl()` e `getMailtoSupportUrl()`.
+  - Adicionada a seção "Ajuda e suporte" em `src/pages/Settings.tsx` com o botão/link "Falar no WhatsApp" (`https://wa.me/<número>` com `target="_blank" rel="noopener noreferrer"`), o link `mailto:` com o e-mail de suporte e a exibição da versão atual do app lida do `package.json` (`v0.1.6`).
+  - Adicionadas as classes `.support-actions` e `.support-version` em `src/index.css` usando apenas variáveis CSS existentes, com ajuste responsivo em `@media (max-width: 700px)` para empilhar os botões em largura de celular.
+- Arquivos alterados: `src/config/support.ts` (criado), `src/pages/Settings.tsx`, `src/index.css`, `tasks/002-suporte-no-app.md`
 - Como testar:
-- `npm run build`:
+  1. Rodar `npm run build` para validar TypeScript e bundle Vite.
+  2. Abrir o app (`npm run dev` e `npm run electron:dev`), navegar até **Configurações** e rolar até **Ajuda e suporte**.
+  3. Verificar se a versão exibida corresponde a `version` em `package.json` (`v0.1.6`).
+  4. Clicar em **Falar no WhatsApp** e no link de e-mail para validar abertura no navegador padrão / cliente de e-mail fora da janela do app.
+  5. Redimensionar para largura mobile (`<= 700px`) e confirmar que os botões quebram/empilham sem overflow horizontal.
+- `npm run build`: não executado (sem permissão de terminal nesta sessão)
 - Observações / dúvidas:
+  - **Electron (`electron/main.ts`):** Como a tarefa proíbe editar `electron/`, não foi alterado `electron/main.ts`. Atualmente, `createWindow()` usa `contextIsolation: true` e `nodeIntegration: false` sem `webContents.setWindowOpenHandler` (nem `shell.openExternal`). Sem esse handler no processo principal do Electron, links `https://` com `target="_blank"` abrem uma nova janela `BrowserWindow` do próprio Electron em vez do navegador padrão do sistema. O Claude precisa adicionar `setWindowOpenHandler` com `shell.openExternal` em `electron/main.ts` para cumprir integralmente o critério no Electron.
+  - **Git / Branch:** Como não há acesso ao terminal nesta sessão, não foi feito `git checkout -b gemini/suporte-no-app` nem commit/push.

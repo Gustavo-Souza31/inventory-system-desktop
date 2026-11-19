@@ -844,6 +844,25 @@ body,
     border-bottom: none;
 }
 
+/* ===== SUPPORT SECTION ===== */
+.support-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.support-version {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+}
+
 /* ===== PRODUCT THUMBNAIL ===== */
 .product-thumb {
     width: 38px;
@@ -1156,6 +1175,13 @@ body,
 
     .toolbar .form-input {
         width: 100%;
+    }
+
+    .support-actions .btn {
+        width: 100%;
+        white-space: normal;
+        word-break: break-word;
+        text-align: center;
     }
 }
 
