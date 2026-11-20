@@ -28,7 +28,7 @@ test('navega por todas as telas do menu sem erros no console', async ({ page }) 
 
   for (const item of menu) {
     await page.getByRole('link', { name: item.label, exact: true }).click();
-    await expect(page).toHaveURL((url) => url.pathname === item.path);
+    await expect(page).toHaveURL((url) => (url.hash.replace(/^#/, '') || '/') === item.path);
   }
 
   expect(errors).toEqual([]);

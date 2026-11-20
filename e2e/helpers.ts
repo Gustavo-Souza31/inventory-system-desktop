@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
 
 /** Mensagem padrão dos testes que precisam de uma conta de teste. */
 export const MOTIVO_CREDENCIAIS = 'Defina E2E_EMAIL e E2E_PASSWORD no .env';
@@ -28,6 +29,18 @@ export async function login(page: Page) {
 
   // Só existe depois da sessão válida (src/components/Layout.tsx).
   await expect(page.locator('.sidebar')).toBeVisible();
+
+  // Se a conta tiver produto abaixo do mínimo (sobra de execução anterior, por
+  // exemplo), o app abre sozinho o aviso de estoque baixo por cima da tela e
+  // bloqueia os cliques. Fecha-o se aparecer.
+  const aviso = page.locator('.modal').filter({ hasText: 'Produtos com estoque baixo' });
+  try {
+    await aviso.waitFor({ state: 'visible', timeout: 2000 });
+    await aviso.getByRole('button', { name: 'Fechar', exact: true }).click();
+    await expect(aviso).toBeHidden();
+  } catch {
+    // Sem aviso: segue.
+  }
 }
 
 export interface DadosProduto {
@@ -50,7 +63,7 @@ export function sufixoUnico() {
 
 /** Filtra a tabela de produtos pelo SKU e devolve a linha encontrada. */
 async function buscarLinhaProduto(page: Page, sku: string) {
-  await page.goto('/produtos');
+  await page.goto('/#/produtos');
   await page.getByPlaceholder('Buscar por nome ou SKU...').fill(sku);
 
   const linha = page.locator('tbody tr').filter({ hasText: sku });
@@ -71,8 +84,8 @@ export async function createProduct(page: Page, dados: DadosProduto): Promise<Da
     ...dados,
   };
 
-  await page.goto('/produtos');
-  await page.getByRole('button', { name: 'Novo Produto' }).click();
+  await page.goto('/#/produtos');
+  await page.getByRole('button', { name: 'Novo Produto' }).first().click();
 
   const modal = page.locator('.modal');
   await expect(modal).toBeVisible();
@@ -116,4 +129,51 @@ export async function deleteProduct(page: Page, sku: string) {
   await confirmacao.getByRole('button', { name: 'Excluir', exact: true }).click();
 
   await expect(page.locator('tbody tr').filter({ hasText: sku })).toHaveCount(0);
+}
+
+/**
+ * Apaga um cliente de teste e o histórico dele pela API do Supabase.
+ * Pela tela não dá: o schema impede excluir cliente com lançamentos
+ * (ON DELETE RESTRICT), de propósito, para ninguém perder o fiado sem querer.
+ * Entra com a própria conta de teste, então a RLS garante que só mexe nos dados dela.
+ */
+async function clienteSupabaseDeTeste() {
+  const url = process.env.VITE_SUPABASE_URL;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  const email = process.env.E2E_EMAIL;
+  const password = process.env.E2E_PASSWORD;
+  if (!url || !anonKey || !email || !password) {
+    throw new Error('Limpeza pela API precisa de VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, E2E_EMAIL e E2E_PASSWORD');
+  }
+
+  const supabase = createClient(url, anonKey, { auth: { persistSession: false } });
+  const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+  if (authError) throw authError;
+  return supabase;
+}
+
+/**
+ * Apaga as contagens de estoque da conta de teste. Excluir o produto já leva os
+ * itens da contagem (CASCADE), mas o cabeçalho da contagem fica; esta limpeza o remove.
+ * É seguro: a conta de teste só serve para o E2E e a RLS isola o resto.
+ */
+export async function deleteStockCounts() {
+  const supabase = await clienteSupabaseDeTeste();
+  const { error } = await supabase.from('stockCounts').delete().gt('id', 0);
+  if (error) throw error;
+  await supabase.auth.signOut();
+}
+
+export async function deleteCustomerByName(nome: string) {
+  const supabase = await clienteSupabaseDeTeste();
+
+  const { data: clientes, error } = await supabase.from('customers').select('id').eq('name', nome);
+  if (error) throw error;
+  for (const { id } of clientes ?? []) {
+    const { error: e1 } = await supabase.from('customerEntries').delete().eq('customerId', id);
+    if (e1) throw e1;
+    const { error: e2 } = await supabase.from('customers').delete().eq('id', id);
+    if (e2) throw e2;
+  }
+  await supabase.auth.signOut();
 }
