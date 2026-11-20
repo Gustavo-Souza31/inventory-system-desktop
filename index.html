@@ -1,7 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <!-- A interface já é em português. Sem isto o Chrome oferece/aplica tradução
+         automática, que troca os textos por <font> e quebra o React
+         ("insertBefore ... not a child of this node"), deixando a tela preta. -->
+    <meta name="google" content="notranslate" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Empacota</title>
