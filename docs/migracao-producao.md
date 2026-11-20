@@ -4,8 +4,31 @@ Roteiro para aplicar o `supabase/schema.sql` novo no projeto de **produção**
 (`inventory-system`, ref `rrzcyzbresnekpitoyhe`). O schema foi validado no projeto de
 teste (`inventory-system-teste`); em produção **nada foi aplicado ainda**.
 
+> **Status: APLICADA em 2026-11-20** no projeto `inventory-system` (ver "Registro da execução").
+> O roteiro abaixo fica como referência e para repetir o processo em outro ambiente.
+
 > Regra: só aplicar com a autorização do dono do projeto, no momento da execução,
-> e depois do backup do passo 1.
+> e depois do backup do passo 1 (a não ser que os dados sejam descartáveis, como foi o caso).
+
+## Registro da execução (2026-11-20)
+
+- Migração `lojistas_perfis_contagem_fiado_termos` aplicada em uma única transação, com a
+  autorização do dono do projeto.
+- **Backup dispensado** pelo dono: os dados de produção eram só de teste (2 produtos, 3 movimentos).
+- Verificação (passo 4): 15 tabelas, 0 sem RLS, 52 políticas, 20 funções, `anon` sem acesso
+  às RPCs sensíveis, gatilho de cadastro criado. Contagens iguais às do "antes".
+- Teste de fumaça no banco (sessão simulada, só leitura): as 2 contas existentes aparecem como
+  **dono** da própria loja, e a conta com produtos continua vendo seus 2 produtos e 3 movimentos.
+- Ajuste posterior, migração `fecha_execucao_handle_new_user`: `REVOKE EXECUTE` da função do
+  gatilho de cadastro para `PUBLIC`, `anon` e `authenticated` (já incluído no `schema.sql`).
+  Provado antes no projeto de teste: o cadastro continua criando perfil e aceite dos termos.
+- Verificador de segurança do Supabase depois do ajuste: sobram só (a) as RPCs de usuário logado,
+  intencionais, e (b) "proteção contra senhas vazadas" desligada no Auth (configuração do painel).
+- Instalador **0.1.8** gerado depois da migração, apontando para a produção (conferido no pacote).
+
+**Cuidado ao gerar o instalador:** o Vite embute o `.env.local` no build. Com o `.env.local`
+apontando para o projeto de teste, o instalador sairia apontando para o teste. Tire o
+`.env.local` da pasta durante o build (e confira que o pacote só contém a URL de produção).
 
 ## 1. Estado de produção (consultado em 2026-11-19, só leitura)
 
@@ -139,10 +162,12 @@ Arquivo: `supabase/rollback-lojistas.sql` (volta às 8 tabelas, políticas `*_ow
 
 ## 6. Checklist
 
-- [ ] Backup JSON das 2 contas guardado
-- [ ] Contagens do "antes" anotadas
-- [ ] Autorização para aplicar em produção
-- [ ] Migração aplicada como uma única transação
-- [ ] Verificação do passo 4 conferida
-- [ ] Teste de fumaça do passo 5 feito
-- [ ] Instalador novo gerado só depois
+- [x] Backup JSON das 2 contas guardado (dispensado: dados de teste)
+- [x] Contagens do "antes" anotadas
+- [x] Autorização para aplicar em produção
+- [x] Migração aplicada como uma única transação
+- [x] Verificação do passo 4 conferida
+- [x] Teste de fumaça do passo 5 feito (no banco; falta abrir o app 0.1.8 e usar, ver abaixo)
+- [x] Instalador novo gerado só depois (0.1.8, `release/Empacota Setup 0.1.8.exe`)
+- [ ] Abrir o instalador 0.1.8, entrar com a conta real e conferir produtos, uma venda e Configurações
+- [ ] Ligar a proteção contra senhas vazadas no Auth e configurar SMTP/URLs antes de abrir cadastros
