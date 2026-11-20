@@ -198,6 +198,13 @@ CREATE TRIGGER "on_auth_user_created"
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+-- É função de gatilho: ninguém precisa (nem deve) chamá-la pela API. O Postgres só
+-- confere EXECUTE quando o gatilho é criado, não quando dispara, então o cadastro
+-- continua criando o perfil. Fecha o alerta "SECURITY DEFINER executável" do Supabase.
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM authenticated;
+
 -- ----------------------------------------------------------------------------
 -- settings (uma linha por usuário)
 -- ----------------------------------------------------------------------------
