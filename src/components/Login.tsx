@@ -1,7 +1,19 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { LogIn, UserPlus, AlertCircle, Boxes, MailCheck, KeyRound } from 'lucide-react';
 import { login, register, resetPassword } from '../database/auth';
 import { formatPhoneBR } from '../utils/phone';
+import { termsOfUse, privacyPolicy, LEGAL_VERSION } from '../legal';
+import { Modal } from './Modal';
+
+const legalLinkStyle: CSSProperties = {
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    font: 'inherit',
+    color: 'var(--accent)',
+    textDecoration: 'underline',
+    cursor: 'pointer',
+};
 
 interface Props {
     onSuccess: () => void;
@@ -15,11 +27,18 @@ export function Login({ onSuccess }: Props) {
     const [phone, setPhone] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
+    const [legalDoc, setLegalDoc] = useState<'terms' | 'privacy' | null>(null);
     const [confirmEmailSent, setConfirmEmailSent] = useState(false);
     const [resetEmailSent, setResetEmailSent] = useState(false);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        // Garante no submit que o cadastro não prossiga sem o aceite dos termos.
+        if (mode === 'register' && !acceptedTerms) {
+            setError('Você precisa aceitar os Termos de Uso e a Política de Privacidade para criar uma conta.');
+            return;
+        }
         setError(null);
         setLoading(true);
         try {
@@ -27,7 +46,7 @@ export function Login({ onSuccess }: Props) {
                 await login(email, password);
                 onSuccess();
             } else {
-                const { needsEmailConfirmation } = await register(email, password, fullName, phone);
+                const { needsEmailConfirmation } = await register(email, password, fullName, phone, LEGAL_VERSION);
                 if (needsEmailConfirmation) {
                     // Projeto Supabase exige confirmação por e-mail: ainda não há
                     // sessão ativa, então não liberamos o app agora.
@@ -76,7 +95,7 @@ export function Login({ onSuccess }: Props) {
                         type="button"
                         className="btn btn-primary"
                         style={{ width: '100%' }}
-                        onClick={() => { setConfirmEmailSent(false); setMode('login'); }}
+                        onClick={() => { setConfirmEmailSent(false); setAcceptedTerms(false); setMode('login'); }}
                     >
                         Voltar para o login
                     </button>
@@ -172,10 +191,10 @@ export function Login({ onSuccess }: Props) {
 
     return (
         <div key="auth-form-screen" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            height: '100vh', background: 'var(--bg-primary)', padding: '20px',
+            display: 'flex',
+            height: '100vh', overflowY: 'auto', background: 'var(--bg-primary)', padding: '20px',
         }}>
-            <div className="card" style={{ maxWidth: '380px', width: '100%', padding: '32px' }}>
+            <div className="card" style={{ maxWidth: '380px', width: '100%', padding: '32px', margin: 'auto' }}>
                 <div style={{ textAlign: 'center', marginBottom: '24px' }}>
                     <div style={{
                         width: '56px', height: '56px', borderRadius: '50%', background: 'var(--accent-light)',
@@ -249,6 +268,53 @@ export function Login({ onSuccess }: Props) {
                         )}
                     </div>
 
+                    {mode === 'register' && (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '8px',
+                            fontSize: '12.5px',
+                            color: 'var(--text-secondary)',
+                            lineHeight: 1.45,
+                        }}>
+                            <input
+                                id="accept-terms"
+                                type="checkbox"
+                                checked={acceptedTerms}
+                                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                                style={{
+                                    marginTop: '2px',
+                                    accentColor: 'var(--accent)',
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                }}
+                            />
+                            <span>
+                                <label htmlFor="accept-terms" style={{ cursor: 'pointer' }}>
+                                    Li e aceito os{' '}
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => setLegalDoc('terms')}
+                                    style={legalLinkStyle}
+                                >
+                                    Termos de Uso
+                                </button>
+                                <label htmlFor="accept-terms" style={{ cursor: 'pointer' }}>
+                                    {' '}e a{' '}
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => setLegalDoc('privacy')}
+                                    style={legalLinkStyle}
+                                >
+                                    Política de Privacidade
+                                </button>
+                                <label htmlFor="accept-terms" style={{ cursor: 'pointer' }}>.</label>
+                            </span>
+                        </div>
+                    )}
+
                     {error && (
                         <div style={{
                             background: 'var(--danger-bg)', color: 'var(--danger)',
@@ -260,7 +326,12 @@ export function Login({ onSuccess }: Props) {
                         </div>
                     )}
 
-                    <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%', padding: '11px', marginTop: '4px' }}>
+                    <button
+                        type="submit"
+                        className="btn btn-primary"
+                        disabled={loading || (mode === 'register' && !acceptedTerms)}
+                        style={{ width: '100%', padding: '11px', marginTop: '4px' }}
+                    >
                         {mode === 'login' ? <LogIn size={16} /> : <UserPlus size={16} />}
                         {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar conta'}
                     </button>
@@ -269,12 +340,37 @@ export function Login({ onSuccess }: Props) {
                 <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null); }}
+                    onClick={() => {
+                        setMode(mode === 'login' ? 'register' : 'login');
+                        setAcceptedTerms(false);
+                        setError(null);
+                    }}
                     style={{ width: '100%', marginTop: '14px' }}
                 >
                     {mode === 'login' ? 'Não tem conta? Criar uma agora' : 'Já tem conta? Entrar'}
                 </button>
             </div>
+
+            {legalDoc && (
+                <Modal
+                    title={legalDoc === 'terms' ? 'Termos de Uso' : 'Política de Privacidade'}
+                    onClose={() => setLegalDoc(null)}
+                    footer={
+                        <button type="button" className="btn btn-primary" onClick={() => setLegalDoc(null)}>
+                            Fechar
+                        </button>
+                    }
+                >
+                    <div style={{
+                        whiteSpace: 'pre-wrap',
+                        fontSize: '13px',
+                        lineHeight: 1.6,
+                        color: 'var(--text-secondary)',
+                    }}>
+                        {legalDoc === 'terms' ? termsOfUse : privacyPolicy}
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 }

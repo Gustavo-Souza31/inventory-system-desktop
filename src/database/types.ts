@@ -75,3 +75,37 @@ export interface ProductStock {
     locationId: number;
     quantity: number;
 }
+
+export interface StockCount {
+    id?: number;
+    locationId: number | null;
+    status: 'aberta' | 'aplicada';
+    notes: string;
+    createdAt: Date;
+    appliedAt: Date | null;
+}
+
+export interface StockCountItem {
+    id?: number;
+    countId: number;
+    productId: number;
+    expected: number;
+    counted: number;
+}
+
+export interface Customer {
+    id?: number;
+    name: string;
+    phone: string;
+    notes: string;
+    createdAt: Date;
+}
+
+export interface CustomerEntry {
+    id?: number;
+    customerId: number;
+    type: 'fiado' | 'pagamento';
+    amount: number;
+    description: string;
+    createdAt: Date;
+}

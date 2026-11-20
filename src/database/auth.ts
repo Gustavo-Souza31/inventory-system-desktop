@@ -26,18 +26,30 @@ export async function login(email: string, password: string): Promise<{ email: s
  * nome/telefone vão em options.data: como a sessão ainda não existe até a
  * confirmação, é isso que alimenta o trigger que cria a linha em "profiles"
  * (ver supabase/schema.sql).
+ *
+ * termsVersion é a versão dos termos e da política de privacidade que a pessoa
+ * aceitou (src/legal). Vai pelo mesmo caminho, e o trigger grava em "consents".
  */
 export async function register(
     email: string,
     password: string,
     fullName: string,
-    phone: string
+    phone: string,
+    termsVersion: string
 ): Promise<{ email: string; needsEmailConfirmation: boolean }> {
+    // O aceite é obrigatório: sem a versão dos termos não se cria a conta.
+    if (!termsVersion.trim()) {
+        throw new Error('É obrigatório aceitar os Termos de Uso e a Política de Privacidade.');
+    }
     const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-            data: { full_name: fullName, phone },
+            data: {
+                full_name: fullName,
+                phone,
+                accepted_terms_version: termsVersion.trim(),
+            },
             emailRedirectTo: 'https://gustavo-souza31.github.io/inventory-system-desktop/',
         },
     });
